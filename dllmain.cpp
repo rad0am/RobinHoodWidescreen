@@ -19,6 +19,17 @@ constexpr uintptr_t ADDR_SET_CAMERA    = 0x005758D0;   // Camera_SetPositionClam
 constexpr uintptr_t ADDR_CAMERA_UPDATE = 0x004C8380;   // Camera_Update (this in ECX), runs every frame
 constexpr uintptr_t ADDR_WORLD_PTR     = 0x006C0FA8;   // pointer to the world object
 
+// ===== Resolution constants in Game.exe (immediates of PUSH / CMP instructions) =====
+// Options menu (FUN_0052CF80), "1024x768" button: push 768.0f; push 1024.0f
+constexpr uintptr_t ADDR_MENU_HEIGHT   = 0x0052D039;
+constexpr uintptr_t ADDR_MENU_WIDTH    = 0x0052D03E;
+// Radio button selection (FUN_0052D090): cmp eax, 1024. Any other width logs
+// "Warning, unknown screen resolution." and leaves no button selected.
+constexpr uintptr_t ADDR_MENU_SELECT_W = 0x0052D0C0;
+// Settings init (FUN_0055D670), default for a new profile: push 600.0f; push 800.0f
+constexpr uintptr_t ADDR_DEFAULT_HEIGHT = 0x0055D763;
+constexpr uintptr_t ADDR_DEFAULT_WIDTH  = 0x0055D768;
+
 // ===== Fields of the world object =====
 constexpr uint32_t OFF_SCREEN_W = 0x4728;   // float, screen width in pixels
 constexpr uint32_t OFF_SCREEN_H = 0x472C;   // float, screen height in pixels
@@ -35,11 +46,16 @@ constexpr size_t PROLOGUE_SIZE = 7;
 const uint8_t PROLOGUE_SET_CAMERA[PROLOGUE_SIZE]    = { 0x6A, 0xFF, 0x68, 0x1F, 0xB3, 0x66, 0x00 };
 const uint8_t PROLOGUE_CAMERA_UPDATE[PROLOGUE_SIZE] = { 0x6A, 0xFF, 0x68, 0x72, 0xC6, 0x65, 0x00 };
 
-// Appends a line to RobinHoodWidescreen.log in the game folder.
+constexpr const char* MOD_VERSION = "0.2";
+
+// Appends a line to RobinHoodWidescreen.log in the game folder. The first call of each run
+// truncates the file, so the log only holds the current session.
 void Log(const char* text)
 {
+    static bool firstCall = true;
     FILE* f = nullptr;
-    if (fopen_s(&f, "RobinHoodWidescreen.log", "a") == 0 && f) {
+    if (fopen_s(&f, "RobinHoodWidescreen.log", firstCall ? "w" : "a") == 0 && f) {
+        firstCall = false;
         fprintf(f, "%s\n", text);
         fclose(f);
     }
@@ -155,6 +171,74 @@ void InstallAllHooks()
     Log(g_origCameraUpdate ? "Hook CameraUpdate installed" : "Hook CameraUpdate NOT installed (unknown Game.exe version)");
 }
 
+// ===== Resolution =====
+
+// Overwrites 4 bytes of game code with value, but only if they currently hold expected.
+// Returns false (and changes nothing) for a different Game.exe version.
+template <typename T>
+bool PatchValue(uintptr_t address, T expected, T value)
+{
+    static_assert(sizeof(T) == 4);
+    auto* target = reinterpret_cast<uint8_t*>(address);
+    if (std::memcmp(target, &expected, sizeof(T)) != 0)
+        return false;
+
+    DWORD oldProtect;
+    VirtualProtect(target, sizeof(T), PAGE_EXECUTE_READWRITE, &oldProtect);
+    std::memcpy(target, &value, sizeof(T));
+    VirtualProtect(target, sizeof(T), oldProtect, &oldProtect);
+    FlushInstructionCache(GetCurrentProcess(), target, sizeof(T));
+    return true;
+}
+
+// Physical resolution of the primary monitor. DirectDraw and the GOG wrapper use the primary
+// monitor. GetSystemMetrics(SM_CXSCREEN) is not used: the game is not DPI aware, so with
+// Windows scaling at 125%/150% it would return scaled-down values.
+bool GetDesktopResolution(DWORD& width, DWORD& height)
+{
+    HMONITOR monitor = MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY);
+    MONITORINFOEXW info{};
+    info.cbSize = sizeof(info);
+    if (!GetMonitorInfoW(monitor, &info))
+        return false;
+
+    DEVMODEW mode{};
+    mode.dmSize = sizeof(mode);
+    if (!EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &mode))
+        return false;
+
+    width  = mode.dmPelsWidth;
+    height = mode.dmPelsHeight;
+    return true;
+}
+
+// Replaces the "1024x768" menu option and the new-profile default (800x600) with the desktop
+// resolution. Game.exe on disk stays unmodified.
+void PatchResolution()
+{
+    DWORD width = 0, height = 0;
+    if (!GetDesktopResolution(width, height)) {
+        Log("Resolution: could not read the desktop resolution, menu left unchanged");
+        return;
+    }
+    if (width <= 1024 || height < 768) {
+        Log("Resolution: desktop is not larger than 1024x768, menu left unchanged");
+        return;
+    }
+
+    auto w = static_cast<float>(width);
+    auto h = static_cast<float>(height);
+    bool menu     = PatchValue(ADDR_MENU_HEIGHT, 768.0f, h) && PatchValue(ADDR_MENU_WIDTH, 1024.0f, w);
+    bool select   = PatchValue<uint32_t>(ADDR_MENU_SELECT_W, 1024, width);
+    bool defaults = PatchValue(ADDR_DEFAULT_HEIGHT, 600.0f, h) && PatchValue(ADDR_DEFAULT_WIDTH, 800.0f, w);
+
+    char msg[200];
+    snprintf(msg, sizeof(msg), "Resolution: desktop %lux%lu, menu button %s, selection %s, new profile default %s",
+             width, height, menu ? "patched" : "NOT patched", select ? "patched" : "NOT patched",
+             defaults ? "patched" : "NOT patched");
+    Log(msg);
+}
+
 // ===== dinput.dll proxy =====
 
 // Loads the real system dinput.dll once and returns the address of one of its functions.
@@ -211,11 +295,15 @@ extern "C" HRESULT WINAPI DirectInputCreateEx(HINSTANCE hinst, DWORD version, RE
 
 // Runs when Windows loads the DLL, before any game code. Only light work is allowed here
 // (the loader lock is held), so the real dinput.dll is loaded later, on first use.
+// user32 is safe to call: we import it, so Windows initializes it before our DllMain.
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
 {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(module);
-        Log("RobinHoodWidescreen loaded");
+        char msg[64];
+        snprintf(msg, sizeof(msg), "RobinHoodWidescreen %s loaded", MOD_VERSION);
+        Log(msg);
+        PatchResolution();
         InstallAllHooks();
     }
     return TRUE;

@@ -109,6 +109,14 @@ The menu (`0x52CF80`) passes the resolution as `push float` (`68` + 4 bytes), he
 | 800x600 | `0x12CFF2` / `0x12CFF7` | `0x52CFF2` / `0x52CFF7` | `68 00 00 16 44` / `68 00 00 48 44` | unchanged |
 | 1024x768 | `0x12D038` / `0x12D03D` | `0x52D038` / `0x52D03D` | `68 00 00 40 44` / `68 00 00 80 44` | `68 00 00 B4 44` (1440.0) / `68 00 00 57 45` (3440.0) |
 
+Since 2026-10-28 `Game.exe` is original again; `PatchResolution()` in the DLL writes the desktop resolution in memory into:
+
+| What | VA (immediate) | Original |
+|---|---|---|
+| 1024x768 button height / width | `0x52D039` / `0x52D03E` | 768.0f / 1024.0f |
+| Radio selection `cmp eax, 0x400` in `FUN_0052D090` | `0x52D0C0` | `00 04 00 00` (unknown width → "Warning, unknown screen resolution.") |
+| New profile default height / width (`FUN_0055d670`) | `0x55D763` / `0x55D768` | 600.0f / 800.0f |
+
 Float bytes: `[BitConverter]::GetBytes([single]3440)`. 3440 = `0x45570000`, 1440 = `0x44B40000`, 3840 = `0x45700000`,
 2160 = `0x45070000`, 1720 = `0x44D70000`, 720 = `0x44340000`.
 

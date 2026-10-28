@@ -10,24 +10,23 @@ Ordered by priority. Addresses and structures: [docs/reverse-engineering.md](doc
 Without this the mod cannot be distributed, because a modified `Game.exe` must not be redistributed.
 
 ### 1.1 Restore the original `Game.exe`
-- [ ] Simplest: GOG Galaxy → "Verify / Repair". It restores the original. `dinput.dll` is not a game file so it should stay, but check that.
-- [ ] Alternatively `Game.exe.bak` (HxD's copy). Before using it, check that file offset `0x12D038` holds the original bytes `68 00 00 40 44 68 00 00 80 44`.
+- [x] Original `Game.exe` restored (2026-10-28; bytes at `0x12D038` checked: `68 00 00 40 44 68 00 00 80 44`). `dinput.dll` stayed in the folder.
 
 ### 1.2 Patch in memory instead of in the file
-- [ ] In `DllMain` (before any game code runs) replace the floats of the 1024x768 menu button (`0x52CF80`):
-  - height: immediate at VA **`0x52D039`** (the `push` instruction is at `0x52D038`)
-  - width: immediate at VA **`0x52D03E`** (the `push` instruction is at `0x52D03D`)
-  - check the original bytes `68 00 00 40 44` / `68 00 00 80 44` before writing (same safety check as for the hooks)
-  - `VirtualProtect` → write the `float` → restore the protection (as in `InstallHook`)
-- [ ] Optionally also replace the default resolution of a new profile (800×600 in `FUN_0055d670`, float `push`es around VA `0x55D762`/`0x55D767`; file offsets `0x15D763`/`0x15D768`), so a new player starts at native resolution.
-- [ ] **Investigate first** the engine's existing path: `FUN_0055d670` takes the desktop resolution from `FUN_005e56c0` (width) and `FUN_005e5750` (height) when `g_DrawManager+0x115 != 0`. Find in Ghidra what sets `+0x115` (maybe a command-line switch or windowed mode). Setting this flag might be enough.
-- [ ] Check `cmp eax, 0x400` (1024) at VA `0x52D0BF` (right after the menu code) and `0x648A58`. It might be validation or highlighting of the selected button.
+- [x] `PatchResolution()` in `DllMain` replaces the floats of the 1024x768 menu button (`0x52CF80`):
+  height immediate at VA `0x52D039`, width at VA `0x52D03E`. Original bytes are checked before writing (`PatchValue`).
+- [x] New profile default (800×600 in `FUN_0055d670`): immediates at VA `0x55D763` (600.0) / `0x55D768` (800.0) → desktop resolution.
+- [x] `cmp eax, 0x400` at VA `0x52D0BF` (imm `0x52D0C0`) = `FUN_0052D090`, selects the radio button for the current width
+  (640/800/1024). Any other width logs "Warning, unknown screen resolution." (`RHMenuGraphics.cpp`) and selects nothing → patched to the desktop width.
+- [x] Tested 2026-10-28: a clean install starts at the desktop resolution. A resolution already saved in the settings is kept
+  (by design: the player's choice wins, the native one is on the menu button). Side effect: a saved 1024x768 matches no button,
+  so nothing is selected until the player picks one. Mention in the README; maybe an `.ini` option `ForceDesktop=1` (1.4).
+- [ ] Optional: the engine's own path — `FUN_0055d670` takes the desktop resolution from `FUN_005e56c0` / `FUN_005e5750` when `g_DrawManager+0x115 != 0`. What sets `+0x115`? Not needed any more, only for curiosity.
+- [ ] `0x648A58` (another `cmp ..., 0x400`): not checked.
 
 ### 1.3 Reading the desktop resolution (multiple monitors)
-- [ ] **Which monitor:** DirectDraw with the default device and the GOG wrapper run on the **primary monitor**, so use the primary one by default:
-  `MonitorFromPoint({0,0}, MONITOR_DEFAULTTOPRIMARY)` → `GetMonitorInfoW` (`MONITORINFOEXW::szDevice`) →
-  `EnumDisplaySettingsW(szDevice, ENUM_CURRENT_SETTINGS, &dm)` → `dm.dmPelsWidth` × `dm.dmPelsHeight`.
-- [ ] **Do not use `GetSystemMetrics(SM_CXSCREEN)`**: the game is not DPI-aware, so with Windows scaling at 125%/150% it returns scaled-down values. `EnumDisplaySettings` returns the physical mode.
+- [x] `GetDesktopResolution()`: primary monitor, `MonitorFromPoint` → `GetMonitorInfoW` → `EnumDisplaySettingsW(ENUM_CURRENT_SETTINGS)`
+  (physical mode, not `GetSystemMetrics`, which is DPI-scaled for a non-DPI-aware game). Desktops ≤ 1024 wide or < 768 high leave the menu unchanged.
 - [ ] An `.ini` option to pick the monitor (index from `EnumDisplayDevicesW`) for people who play on a non-primary display. Check whether the GOG wrapper can display on a monitor other than the primary one at all.
 - [ ] Cases to test: two monitors with different resolutions (e.g. 3440×1440 primary + 1920×1080), a monitor rotated to portrait, the primary monitor changing between runs, DPI scaling at 100/125/150%.
 - [ ] GOG wrapper: `dxcfg.ini` has `display=3440x1440@165`. Check whether `dxcfg.exe` has a "desktop resolution" option. Otherwise every player has to set up the wrapper by hand (document it in the instructions).
@@ -105,4 +104,4 @@ Observations at 3440×1440 (screenshots from 2026-10-23):
 - [ ] Player instructions (PL + EN): installation (copy `dinput.dll` + `.ini`), wrapper setup in `dxcfg.exe`,
   **Smart App Control** blocks unsigned DLLs, **Galaxy "Repair"**, uninstalling.
 - [ ] Consider signing the DLL (certificate cost). Without a signature SAC will always block it.
-- [ ] Version in the log (e.g. `RobinHoodWidescreen 0.1 loaded`).
+- [x] Version in the log (`MOD_VERSION` in `dllmain.cpp`, `RobinHoodWidescreen 0.2 loaded`). The log is truncated on every game start.
