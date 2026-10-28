@@ -1,0 +1,19 @@
+# CMake / CLion build output
+cmake-build-*/
+build/
+out/
+
+# Build artifacts
+*.dll
+*.exp
+*.ilk
+*.lib
+*.pdb
+*.obj
+
+# CLion: keep shared project settings, drop per-user state
+.idea/workspace.xml
+.idea/shelf/
+.idea/httpRequests/
+.idea/dataSources/
+.idea/dataSources.local.xml
