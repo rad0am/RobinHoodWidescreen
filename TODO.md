@@ -21,8 +21,9 @@ Without this the mod cannot be distributed, because a modified `Game.exe` must n
 - [x] Tested 2026-10-28: a clean install starts at the desktop resolution. A resolution already saved in the settings is kept
   (by design: the player's choice wins, the native one is on the menu button). Side effect: a saved 1024x768 matches no button,
   so nothing is selected until the player picks one. Mention in the README; maybe an `.ini` option `ForceDesktop=1` (1.4).
-- [ ] Optional: the engine's own path — `FUN_0055d670` takes the desktop resolution from `FUN_005e56c0` / `FUN_005e5750` when `g_DrawManager+0x115 != 0`. What sets `+0x115`? Not needed any more, only for curiosity.
-- [ ] `0x648A58` (another `cmp ..., 0x400`): not checked.
+- [x] Dropped: the engine's own path (`FUN_0055d670` takes the desktop resolution from `FUN_005e56c0` / `FUN_005e5750`
+  when `g_DrawManager+0x115 != 0`). Not needed, the patches above already do this.
+- [x] `0x648A58` (`and eax, 0xC00; cmp eax, 0x400`): FPU control word rounding bits in the CRT, not related to resolution.
 
 ### 1.3 Reading the desktop resolution (multiple monitors)
 - [x] `GetDesktopResolution()`: primary monitor, `MonitorFromPoint` → `GetMonitorInfoW` → `EnumDisplaySettingsW(ENUM_CURRENT_SETTINGS)`

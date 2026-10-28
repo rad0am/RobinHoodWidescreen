@@ -26,7 +26,7 @@ at widescreen and UHD resolutions (tested: 3440×1440, 21:9 ultrawide).
 3. **Loading:** the mod is a **`dinput.dll` proxy**. The game imports `DINPUT.DLL`, and Windows looks in the game folder first,
    so it loads our DLL. It installs the hooks in `DllMain` and forwards DirectInput calls to the system `dinput.dll`.
 
-Details: [docs/reverse-engineering.md](docs/reverse-engineering.md). Work log: [docs/journal.md](docs/journal.md).
+Details: [docs/reverse-engineering.md](docs/reverse-engineering.md).
 
 ## Files
 
@@ -35,7 +35,7 @@ Details: [docs/reverse-engineering.md](docs/reverse-engineering.md). Work log: [
 | `dllmain.cpp` | the whole mod: hooks, zoom logic, DirectInput proxy, `DllMain` |
 | `exports.def` | undecorated exports: `DirectInputCreateA`, `DirectInputCreateW`, `DirectInputCreateEx` |
 | `CMakeLists.txt` | build: 32-bit, static CRT, output file `dinput.dll` |
-| `docs/` | reverse engineering notes and work log |
+| `docs/` | reverse engineering notes |
 | `TODO.md` | remaining work |
 
 ## Building

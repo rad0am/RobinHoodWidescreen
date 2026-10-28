@@ -33,7 +33,7 @@ which helps a lot with naming classes.
 | `0x6C0E48` | `g_App` | application **object** (not a pointer). `[g_App+0x28]` = settings object (`GetSettings`) |
 | `0x6C11D0` | `g_DrawManager` | pointer to `SBDrawManager` (`this` for `SetVideoMode`) |
 | `0x6C0A88` | `g_World` | pointer to the world/mission object (0 in menus) |
-| `0x6C0FA8` | (alias) | the **same** world object as `g_World` (verified with ZoomMonitor) |
+| `0x6C0FA8` | (alias) | the **same** world object as `g_World` (verified at runtime) |
 
 ## Structures (confirmed fields)
 
@@ -130,19 +130,6 @@ Both hooked functions start with the MSVC SEH prologue:
 These 7 bytes do not depend on where they are in memory. The hook replaces them with `E9 rel32` (JMP to our function) + `90 90`.
 The trampoline (executable memory from `VirtualAlloc`) holds the copied 7 bytes + `JMP target+7`.
 Before overwriting, the bytes are compared with the expected ones, so a different game version is left untouched.
-
-## Tool: ZoomMonitor
-
-A separate console program (x86; run it as administrator, because the game uses `RUNASADMIN`) that prints the world fields
-every second through `ReadProcessMemory`. It was used to confirm the addresses. The key loop:
-```cpp
-DWORD cam = Read<DWORD>(proc, 0x6C0FA8);
-float screenW = Read<float>(proc, cam + 0x4728), screenH = Read<float>(proc, cam + 0x472C);
-float mapW    = Read<float>(proc, cam + 0x4730), mapH    = Read<float>(proc, cam + 0x4734);
-float zoom    = Read<float>(proc, cam + 0x475C);
-float needed  = max(screenW / mapW, (screenH - 80) / mapH);
-```
-Output: `screen 3440x1440 | map 2944x2176 | zoom 2 | needed >= 1.16848`.
 
 ## Other data formats (from an earlier session)
 
