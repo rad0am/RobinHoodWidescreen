@@ -75,11 +75,32 @@ Observations at 3440×1440 (screenshots from 2026-10-23):
 - [ ] Find the drawing of the scroll (bitmap + text) and the fonts (`DATA\Interface\Fonts\MANAGER.CFG`).
 - [ ] Real interface scaling in the engine is hard (every element separately). Only consider it after 2.3.
 
-### 2.3 Simplest enlargement: render at a lower resolution
-- [ ] Test e.g. **1720×720** (half of 3440×1440; the wrapper scales 2× without blur). Interface and fonts become 2× bigger,
-  but less of the map is visible (720 px vertically instead of 768). Compromise: 2580×1080 (scale 1.33).
-- [ ] For a test, patching the 800x600 button is enough: `0x12CFF5: 16→34`, `0x12CFFA: 48→D7` (720.0 / 1720.0).
-- [ ] If it works well, add the `RenderScale` option to the `.ini` (item 1.4).
+### 2.3 Simplest enlargement: render at a lower resolution (three buttons = three interface sizes)
+With `display=desktop` in `dxcfg.ini` the monitor always stays at its native mode and the wrapper scales whatever the game
+renders. So the render resolution does not have to be a display mode: any size with the monitor's aspect ratio works.
+The Windows mode list is not useful (most entries have a different aspect ratio → stretched image or black bars).
+
+Plan (decided 2026-10-28): replace all three menu buttons with sizes computed from the desktop resolution, same aspect ratio:
+
+| Button | Meaning | 3440×1440 | 3840×2160 | 1920×1080 |
+|---|---|---|---|---|
+| 1024x768 | native: most map | 3440×1440 | 3840×2160 | 1920×1080 |
+| 800x600 | middle (height 1080, or halfway when native ≤ 1080) | 2580×1080 | 1920×1080 | 1536×864 |
+| 640x480 | big interface: height 768 | 1834×768 | 1366×768 | 1366×768 |
+
+- Height 768 instead of half (720): the interface was designed for 1024×768, so at height 768 menus, briefing and fonts have
+  the original on-screen size, just wider. At 720 the main menu frame (~1024×768) probably does not fit vertically.
+  Cost: scale 1.875 instead of an exact 2×, possibly slightly softer image.
+- Widths rounded to an even number. Skip a button (leave it original) if its size would be < 1024×768 or equal to another button.
+- [ ] Patch all three buttons in `PatchResolution()`: push immediates for 640x480 at VA `0x52CFAA` / `0x52CFAF`, 800x600 at
+  `0x52CFF3` / `0x52CFF8` (1024x768 already done).
+- [ ] Patch the radio selection compares in `FUN_0052D090`: `cmp eax, 0x280` (VA `0x52D0A1`, imm `0x52D0A2`), `cmp eax, 0x320` (imm `0x52D0B9`); bytes checked in Game.exe: `3D 80 02 00 00` / `3D 20 03 00 00`.
+- [ ] Test in game: sharpness at 1.875×, main menu at height 768, how much map is visible, zoom (hook should raise it as needed).
+- [ ] Requires 1.5 (button labels showing the real sizes), otherwise players cannot tell what they choose.
+- [ ] `.ini` (1.4): `Width=`/`Height=` override for an exact size; drop the `RenderScale` idea if the buttons cover it.
+
+Rejected for now: a dropdown with all resolutions like in Windows display settings. The menu uses the engine's own UI
+(buttons described in `Default.res`, `BTTN` block, undecoded format), so adding a new control type is a lot of RE for little gain.
 
 ### 2.4 Black strip at the bottom
 - [ ] Check how it looked at 1024×768. Possibly stretch or tile the bar graphic between the ornaments.
