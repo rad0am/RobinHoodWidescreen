@@ -1,4 +1,4 @@
-// RobinHoodWidescreen - fixes zoom at high resolutions in
+// RobinHoodWidescreen - native desktop resolution and a zoom fix for high resolutions in
 // "Robin Hood: The Legend of Sherwood" (GOG, Game.exe 1.1.0.0).
 //
 // The game ships as a dinput.dll proxy: Windows loads this DLL instead of the
@@ -10,16 +10,19 @@
 // map wraps into misaligned bands and zoom 0.5 can crash the game.
 
 #include <windows.h>
+#include <bit>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+
+namespace {
 
 // ===== Addresses in Game.exe (GOG, version 1.1.0.0) =====
 constexpr uintptr_t ADDR_SET_CAMERA    = 0x005758D0;   // Camera_SetPositionClamped (cdecl)
 constexpr uintptr_t ADDR_CAMERA_UPDATE = 0x004C8380;   // Camera_Update (this in ECX), runs every frame
 constexpr uintptr_t ADDR_WORLD_PTR     = 0x006C0FA8;   // pointer to the world object
 
-// ===== Resolution constants in Game.exe (immediates of PUSH / CMP instructions) =====
+// ===== Resolution constants in Game.exe (operands of PUSH / CMP instructions) =====
 // Options menu (FUN_0052CF80), "1024x768" button: push 768.0f; push 1024.0f
 constexpr uintptr_t ADDR_MENU_HEIGHT   = 0x0052D039;
 constexpr uintptr_t ADDR_MENU_WIDTH    = 0x0052D03E;
@@ -72,14 +75,14 @@ T& Field(uintptr_t object, uint32_t offset)
 // Raises the zoom to the smallest allowed level at which the whole view fits on the map.
 void EnsureZoomFits(const char* caller)
 {
-    uintptr_t world = *reinterpret_cast<uintptr_t*>(ADDR_WORLD_PTR);
+    auto world = *reinterpret_cast<uintptr_t*>(ADDR_WORLD_PTR);
     if (world == 0) return;                              // no mission loaded
 
     float screenW = Field<float>(world, OFF_SCREEN_W);
     float screenH = Field<float>(world, OFF_SCREEN_H);
     float mapW    = Field<float>(world, OFF_MAP_W);
     float mapH    = Field<float>(world, OFF_MAP_H);
-    float& zoom   = Field<float>(world, OFF_ZOOM);
+    auto& zoom    = Field<float>(world, OFF_ZOOM);
 
     if (mapW <= 0.0f || mapH <= 0.0f) return;            // map not loaded yet
 
@@ -93,7 +96,7 @@ void EnsureZoomFits(const char* caller)
     // Zooming in only shrinks the view, so the camera position stays inside the map.
     float oldZoom = zoom;
     zoom = 2.0f;                                         // fallback: the largest level the game supports
-    const float levels[] = { 0.5f, 1.0f, 2.0f };
+    constexpr float levels[] = { 0.5f, 1.0f, 2.0f };
     for (float level : levels) {
         if (level >= needed) { zoom = level; break; }    // the smallest level that fits
     }
@@ -173,21 +176,25 @@ void InstallAllHooks()
 
 // ===== Resolution =====
 
+// Bit pattern of a float as it is stored in an instruction, e.g. Bits(1024.0f) == 0x44800000.
+constexpr uint32_t Bits(float value)
+{
+    return std::bit_cast<uint32_t>(value);
+}
+
 // Overwrites 4 bytes of game code with value, but only if they currently hold expected.
 // Returns false (and changes nothing) for a different Game.exe version.
-template <typename T>
-bool PatchValue(uintptr_t address, T expected, T value)
+bool PatchDword(uintptr_t address, uint32_t expected, uint32_t value)
 {
-    static_assert(sizeof(T) == 4);
     auto* target = reinterpret_cast<uint8_t*>(address);
-    if (std::memcmp(target, &expected, sizeof(T)) != 0)
+    if (std::memcmp(target, &expected, sizeof(expected)) != 0)
         return false;
 
     DWORD oldProtect;
-    VirtualProtect(target, sizeof(T), PAGE_EXECUTE_READWRITE, &oldProtect);
-    std::memcpy(target, &value, sizeof(T));
-    VirtualProtect(target, sizeof(T), oldProtect, &oldProtect);
-    FlushInstructionCache(GetCurrentProcess(), target, sizeof(T));
+    VirtualProtect(target, sizeof(value), PAGE_EXECUTE_READWRITE, &oldProtect);
+    std::memcpy(target, &value, sizeof(value));
+    VirtualProtect(target, sizeof(value), oldProtect, &oldProtect);
+    FlushInstructionCache(GetCurrentProcess(), target, sizeof(value));
     return true;
 }
 
@@ -226,11 +233,11 @@ void PatchResolution()
         return;
     }
 
-    auto w = static_cast<float>(width);
-    auto h = static_cast<float>(height);
-    bool menu     = PatchValue(ADDR_MENU_HEIGHT, 768.0f, h) && PatchValue(ADDR_MENU_WIDTH, 1024.0f, w);
-    bool select   = PatchValue<uint32_t>(ADDR_MENU_SELECT_W, 1024, width);
-    bool defaults = PatchValue(ADDR_DEFAULT_HEIGHT, 600.0f, h) && PatchValue(ADDR_DEFAULT_WIDTH, 800.0f, w);
+    uint32_t w = Bits(static_cast<float>(width));
+    uint32_t h = Bits(static_cast<float>(height));
+    bool menu     = PatchDword(ADDR_MENU_HEIGHT, Bits(768.0f), h) && PatchDword(ADDR_MENU_WIDTH, Bits(1024.0f), w);
+    bool select   = PatchDword(ADDR_MENU_SELECT_W, 1024, width);
+    bool defaults = PatchDword(ADDR_DEFAULT_HEIGHT, Bits(600.0f), h) && PatchDword(ADDR_DEFAULT_WIDTH, Bits(800.0f), w);
 
     char msg[200];
     snprintf(msg, sizeof(msg), "Resolution: desktop %lux%lu, menu button %s, selection %s, new profile default %s",
@@ -265,6 +272,8 @@ FARPROC GetRealProc(const char* name)
     return proc;
 }
 
+}  // namespace
+
 // All three creation functions are exported (see exports.def), because the game's DirectX
 // version check looks them up with GetProcAddress. Signatures must match the originals exactly:
 // WINAPI is __stdcall, so the callee removes its arguments from the stack.
@@ -272,14 +281,14 @@ FARPROC GetRealProc(const char* name)
 extern "C" HRESULT WINAPI DirectInputCreateA(HINSTANCE hinst, DWORD version, LPVOID* out, LPUNKNOWN outer)
 {
     using Fn = HRESULT (WINAPI*)(HINSTANCE, DWORD, LPVOID*, LPUNKNOWN);
-    static Fn real = reinterpret_cast<Fn>(GetRealProc("DirectInputCreateA"));
+    static auto real = reinterpret_cast<Fn>(GetRealProc("DirectInputCreateA"));
     return real ? real(hinst, version, out, outer) : E_FAIL;
 }
 
 extern "C" HRESULT WINAPI DirectInputCreateW(HINSTANCE hinst, DWORD version, LPVOID* out, LPUNKNOWN outer)
 {
     using Fn = HRESULT (WINAPI*)(HINSTANCE, DWORD, LPVOID*, LPUNKNOWN);
-    static Fn real = reinterpret_cast<Fn>(GetRealProc("DirectInputCreateW"));
+    static auto real = reinterpret_cast<Fn>(GetRealProc("DirectInputCreateW"));
     return real ? real(hinst, version, out, outer) : E_FAIL;
 }
 
@@ -287,7 +296,7 @@ extern "C" HRESULT WINAPI DirectInputCreateEx(HINSTANCE hinst, DWORD version, RE
                                               LPVOID* out, LPUNKNOWN outer)
 {
     using Fn = HRESULT (WINAPI*)(HINSTANCE, DWORD, REFIID, LPVOID*, LPUNKNOWN);
-    static Fn real = reinterpret_cast<Fn>(GetRealProc("DirectInputCreateEx"));
+    static auto real = reinterpret_cast<Fn>(GetRealProc("DirectInputCreateEx"));
     return real ? real(hinst, version, riid, out, outer) : E_FAIL;
 }
 
@@ -296,7 +305,8 @@ extern "C" HRESULT WINAPI DirectInputCreateEx(HINSTANCE hinst, DWORD version, RE
 // Runs when Windows loads the DLL, before any game code. Only light work is allowed here
 // (the loader lock is held), so the real dinput.dll is loaded later, on first use.
 // user32 is safe to call: we import it, so Windows initializes it before our DllMain.
-BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
+// extern "C": the CRT startup code calls DllMain by its undecorated C name.
+extern "C" BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
 {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(module);
