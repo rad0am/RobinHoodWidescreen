@@ -137,16 +137,59 @@ Byte-pattern search over Game.exe for the integer and float forms of 640/800/102
 | float 480.0 + 640.0 pairs `push 480.0; push 640.0; push 0; push 0; call` | `0x52C61D`, `0x52D7BE`, `0x52E51F`, `0x53083D`, `0x536D9D`, `0x5388CE`, `0x53EA4E`, `0x53FE3F`, `0x541AE1` (+ `0x52CFAA` button) | a **rectangle (0, 0, 640, 480)** built in many menu screens (`0x52C...`–`0x541...` = the `RHMenu*` code). Candidate for a virtual 640×480 coordinate space of menu dialogs → lead for TODO 2.1/2.2 (pause menu, briefing) |
 | integer 640 (`80 02 00 00`) | 36 hits | includes `0x40B797` (`push 280h` for the intro/outro videos at 640×480) — not touched by the mod |
 
+Float bytes: `[BitConverter]::GetBytes([single]3440)`. 3440 = `0x45570000`, 1440 = `0x44B40000`, 3840 = `0x45700000`,
+2160 = `0x45070000`, 1720 = `0x44D70000`, 720 = `0x44340000`.
+
 ## Menu texts (`1045\Data\Text\Level.res`)
 
 The resolution button labels are **not** in Game.exe (no ASCII/UTF-16 hit), only in the Polish `Level.res`, at file offset
-`0x367AF5` (offsets below point at the length prefix): a list of length-prefixed UTF-16 strings (`u16 length` + characters, no terminator), not aligned to 2 bytes:
+`0x367AF5` (offsets below point at the length prefix): length-prefixed UTF-16 strings (`u16 length` + characters, no terminator), not aligned to 2 bytes:
 `"Rozdzielczość"` (len 13), `"640x480"` (`0x367B0D`), `"800x600"` (`0x367B1D`), `"1024x768"` (`0x367B2D`), then
 `"Efekty specjalne"`, `"Pole widzenia alfa"`, `"Przezroczyste cienie"`, `"Efekty animacyjne"`, ... (the options screen).
-The entry that holds this list has not been identified yet (the simple 3-string `TEXT` layout does not match here).
 
-Float bytes: `[BitConverter]::GetBytes([single]3440)`. 3440 = `0x45570000`, 1440 = `0x44B40000`, 3840 = `0x45700000`,
-2160 = `0x45070000`, 1720 = `0x44D70000`, 720 = `0x44340000`.
+It is a normal `TEXT` entry, just a big one: the **last entry (index 507) of `Level.res`, id `1000507` (`0xF443B`)**,
+at file offset `0x3676ED`, with **343 strings** = the whole interface string table (menus, options, key names, HUD texts).
+Selected indexes (0-based): 0 "Graj!", 9 "Kontynuuj", 11 "Zapisz", 13 "Powtórz misję", 28 "Opcje graficzne",
+**42 "Rozdzielczość", 43 "640x480", 44 "800x600", 45 "1024x768"**, 63 "Pieniądze: %i£", 262 "Proszę chwilę zaczekać...".
+Strings with `%i`/`%s` are printf formats filled in by the code.
+
+No `push 2Bh/2Ch/2Dh` (indexes 43–45) in the menu code (`0x520000`–`0x548000`), so the button labels probably get their
+index from data (`Default.res`, `BTTN`) or a register rather than from a `push` immediate.
+
+Searching every `push imm8` followed by a call to `GetUIText`: only `0x2A` (42, at `0x52C8F3`) and `0x2E` (46, at `0x52C97F`)
+in the graphics options code, **no 43/44/45**. The resolution button labels are fetched some other way (button data /
+computed index), but every path ends in `Resource_GetText`, which is why the mod hooks that function.
+
+### `GetUIText` — `0x5E23D0` (confirmed in Ghidra 2026-10-30)
+
+`std::wstring* __cdecl GetUIText(std::wstring* out, int index)` (ends with `add esp,0x20; ret`, caller cleans up).
+Calls `Resource_GetText([0x6C1840], 0xF443B, index, &tmp)`; if that fails it uses `u"Bad menu text ID..."` (`0x6B91D0`).
+The only `.text` reference to `0xF443B` is the `push` at `0x5E2415`. ~240 callers, e.g. pause menu (`0x52D846`… indexes 9–14),
+the graphics options (`0x52C8FB`: 42 "Rozdzielczość"), key names (`0x5CD05F`…).
+Example: `0x52D838: push 9; push ecx; call GetUIText` → "Kontynuuj".
+
+### `Resource_GetText` — `0x6009E0`
+
+`bool __thiscall Resource_GetText(ResourceManager* this, uint id, uint index, std::wstring* out)`, `RET 0xC`.
+`this` = `[0x6C1840]` (`SBResource`, source path `P:\Robin_Hood\SBLibNG\SBResource...`). Finds/loads the resource `id`
+(`FUN_00601bd0` lookup, `FUN_00600db0` load, error "Unable to recover a resource"), then the entry's string vector
+(`+0x14` begin, `+0x18` end, 16-byte `std::wstring` elements) and copies element `index` into `out` (shares the buffer and
+increments the reference count when possible). Returns 0 when `index` is out of range.
+Prologue: `83 EC 10` `8D 44 24 14` (7 bytes, ESP-relative only) → **hooked** since v0.4.
+
+### The game's `std::wstring` (MSVC 6 STL)
+
+| Offset | Type | Meaning |
+|---|---|---|
+| `+0x0` | u8 | allocator (empty) |
+| `+0x4` | `wchar_t*` | text; the **byte at `ptr-1` is the reference count** (`0xFF` = frozen), the allocation starts at `ptr-2 bytes` |
+| `+0x8` | u32 | length |
+| `+0xC` | u32 | capacity |
+
+Helpers in Game.exe: `0x4239E0` = `_Grow(n, trim)` (`__thiscall`, `RET 8`, returns bool; unshares/allocates with the game's
+heap), `0x4239C0` = `_Eos(n)` (sets length and terminator, `RET 4`), `0x64158F` = `operator delete`, `0x6775DC` = empty string `L""`.
+To change a string returned by the game: `_Grow(n, true)`, copy the characters, set `length` and the terminator — never
+write into a shared buffer.
 
 ## The hook (how it works in `dllmain.cpp`)
 

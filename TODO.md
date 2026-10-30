@@ -49,10 +49,10 @@ Enabled=1
 - [ ] `RenderScale=2` gives e.g. 1720×720 at 3440×1440, the simplest way to enlarge the interface (see 2.3).
 
 ### 1.5 Menu label
-- [ ] The buttons still say "640x480" / "800x600" / "1024x768". Found 2026-10-30: the labels are in
-  `1045\Data\Text\Level.res` at file offset `0x367B0D` (see reverse-engineering.md, "Menu texts"), not in Game.exe.
-  Next: in Ghidra, find how the options menu gets its texts (the function that looks up a text by id) and hook it,
-  or patch the loaded string in memory after `Level.res` is read. Better not to distribute modified game files.
+- [x] 2026-10-30, v0.4: labels are strings 43–45 of TEXT 1000507 (`Level.res`). The DLL hooks `Resource_GetText`
+  (`0x6009E0`) and replaces them with the real sizes ("1832x768", ...) using the game's own `std::wstring::_Grow`.
+  Tested in game 2026-10-30: works. Log line `[GetText] label 43 replaced with ...` confirms it.
+- [x] Test (2026-10-30, OK): options menu labels, no crash when opening/closing the options many times, other menus unchanged.
 
 ### 1.6 Risk: the saved resolution
 - [ ] The resolution is saved in the settings. After removing the mod, the original game will start at 3440×1440 with the zoom bug.
@@ -97,7 +97,7 @@ Plan (decided 2026-10-28): replace all three menu buttons with sizes computed fr
 - Widths rounded to a multiple of 8 (safer for old DirectDraw surface code; aspect error < 0.2 %). A button is skipped (left
   original) if its size would be < 1024×768, not smaller than native, or have the same width as another button
   (the selection compares widths only).
-- [x] 2026-10-30, v0.3: `PatchResolution()` patches all three buttons (`MENU_BUTTONS` table in `dllmain.cpp`): push immediates
+- [x] 2026-10-30, v0.3: `PatchResolution()` patches all three buttons (`MENU_BUTTONS` table in `dllmain.cpp`): push immediate
   and the radio selection compares in `FUN_0052D090` (bytes verified in Game.exe). Tested in game 2026-10-30: works.
 - [x] Check that the GOG wrapper accepts a non-standard mode such as 1832×768 in `SetDisplayMode` (with `display=desktop` it should).
 - [x] Test in game (2026-10-30, OK): sharpness at 1.875×, main menu at height 768, how much map is visible, zoom (hook should raise it as needed).

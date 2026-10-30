@@ -23,6 +23,8 @@ namespace {
 constexpr uintptr_t ADDR_SET_CAMERA    = 0x005758D0;   // Camera_SetPositionClamped (cdecl)
 constexpr uintptr_t ADDR_CAMERA_UPDATE = 0x004C8380;   // Camera_Update (this in ECX), runs every frame
 constexpr uintptr_t ADDR_WORLD_PTR     = 0x006C0FA8;   // pointer to the world object
+constexpr uintptr_t ADDR_GET_TEXT      = 0x006009E0;   // Resource_GetText (this in ECX): string <index> of TEXT <id>
+constexpr uintptr_t ADDR_WSTRING_GROW  = 0x004239E0;   // std::wstring::_Grow(n, trim) of the game's CRT (this in ECX)
 
 // ===== Resolution constants in Game.exe (operands of PUSH / CMP instructions) =====
 // Options menu (FUN_0052CF80): each of the three buttons does "push <height>f; push <width>f".
@@ -40,6 +42,11 @@ constexpr MenuButton MENU_BUTTONS[] = {
     { "800x600",   800, 600, 0x0052CFF3, 0x0052CFF8, 0x0052D0B9 },
     { "1024x768", 1024, 768, 0x0052D039, 0x0052D03E, 0x0052D0C0 },
 };
+// The button labels are strings 43/44/45 of the interface text table (TEXT 1000507 in Level.res).
+constexpr uint32_t UI_TEXT_ID           = 1000507;
+constexpr uint32_t UI_TEXT_FIRST_BUTTON = 43;
+// New labels ("1832x768", ...) for the patched buttons; empty = keep the game's text.
+wchar_t g_buttonLabels[std::size(MENU_BUTTONS)][16] = {};
 // Settings init (FUN_0055D670), default for a new profile: push 600.0f; push 800.0f
 constexpr uintptr_t ADDR_DEFAULT_HEIGHT = 0x0055D763;
 constexpr uintptr_t ADDR_DEFAULT_WIDTH  = 0x0055D768;
@@ -59,8 +66,23 @@ constexpr float    HUD_HEIGHT   = 80.0f;    // bottom interface bar, the map is 
 constexpr size_t PROLOGUE_SIZE = 7;
 const uint8_t PROLOGUE_SET_CAMERA[PROLOGUE_SIZE]    = { 0x6A, 0xFF, 0x68, 0x1F, 0xB3, 0x66, 0x00 };
 const uint8_t PROLOGUE_CAMERA_UPDATE[PROLOGUE_SIZE] = { 0x6A, 0xFF, 0x68, 0x72, 0xC6, 0x65, 0x00 };
+// Resource_GetText has no SEH frame, but its first two instructions are also 7 bytes and only use ESP:
+//   83 EC 10         SUB ESP, 0x10
+//   8D 44 24 14      LEA EAX, [ESP+0x14]
+const uint8_t PROLOGUE_GET_TEXT[PROLOGUE_SIZE]      = { 0x83, 0xEC, 0x10, 0x8D, 0x44, 0x24, 0x14 };
 
-constexpr const char* MOD_VERSION = "0.3";
+// std::wstring as compiled into Game.exe (MSVC 6 STL, 16 bytes). The buffer is reference counted:
+// the byte just before ptr holds the count and copies share it, so the text must never be written
+// in place. _Grow gives the string its own buffer, allocated by the game's heap (which also frees it).
+struct GameWString {
+    uint8_t  allocator;   // empty allocator object
+    wchar_t* ptr;         // text, 0-terminated; nullptr when empty
+    uint32_t length;      // in characters
+    uint32_t capacity;    // in characters
+};
+static_assert(sizeof(GameWString) == 16, "must match the game's std::wstring");
+
+constexpr const char* MOD_VERSION = "0.4";
 
 // Appends a line to RobinHoodWidescreen.log in the game folder. The first call of each run
 // truncates the file, so the log only holds the current session.
@@ -122,9 +144,12 @@ void EnsureZoomFits(const char* caller)
 
 using SetCameraFn    = void* (__cdecl*)(void* out, const float* center);
 using CameraUpdateFn = int (__fastcall*)(void* self, void* edx);
+using GetTextFn      = int (__fastcall*)(void* self, void* edx, uint32_t id, uint32_t index, GameWString* out);
+using WStringGrowFn  = bool (__fastcall*)(GameWString* self, void* edx, uint32_t length, bool trim);
 
 SetCameraFn    g_origSetCamera    = nullptr;   // trampolines that run the original functions
 CameraUpdateFn g_origCameraUpdate = nullptr;
+GetTextFn      g_origGetText      = nullptr;
 
 // Called by the game whenever the camera is moved; center is the requested camera center.
 void* __cdecl Hook_SetCamera(void* out, const float* center)
@@ -140,6 +165,39 @@ int __fastcall Hook_CameraUpdate(void* self, void* edx)
 {
     EnsureZoomFits("CameraUpdate");
     return g_origCameraUpdate(self, edx);
+}
+
+// Replaces the text of a game string, the same way the game's own GetUIText (0x5E23D0) does it.
+void SetGameString(GameWString* str, const wchar_t* text)
+{
+    static const auto grow = reinterpret_cast<WStringGrowFn>(ADDR_WSTRING_GROW);
+    auto length = static_cast<uint32_t>(wcslen(text));
+    if (!grow(str, nullptr, length, true))
+        return;
+    wmemcpy(str->ptr, text, length);
+    str->ptr[length] = L'\0';
+    str->length = length;
+}
+
+// Called by the game for every text it reads from a .res file (menus, missions, dialogs).
+// The original is __thiscall with 3 stack arguments (RET 0xC); __fastcall with an unused EDX
+// has the same layout. Returns nonzero when the text was found.
+int __fastcall Hook_GetText(void* self, void* edx, uint32_t id, uint32_t index, GameWString* out)
+{
+    int found = g_origGetText(self, edx, id, index, out);
+    uint32_t button = index - UI_TEXT_FIRST_BUTTON;   // wraps around for indexes below 43
+    if (found && id == UI_TEXT_ID && button < std::size(MENU_BUTTONS) && g_buttonLabels[button][0]) {
+        SetGameString(out, g_buttonLabels[button]);
+
+        static bool logged[std::size(MENU_BUTTONS)] = {};
+        if (!logged[button]) {
+            logged[button] = true;
+            char msg[96];
+            snprintf(msg, sizeof(msg), "[GetText] label %u replaced with %ls", index, g_buttonLabels[button]);
+            Log(msg);
+        }
+    }
+    return found;
 }
 
 // Replaces the first 7 bytes of target with "JMP hook; NOP; NOP" and returns a trampoline that
@@ -180,9 +238,12 @@ void InstallAllHooks()
         InstallHook(ADDR_SET_CAMERA, PROLOGUE_SET_CAMERA, reinterpret_cast<void*>(&Hook_SetCamera)));
     g_origCameraUpdate = reinterpret_cast<CameraUpdateFn>(
         InstallHook(ADDR_CAMERA_UPDATE, PROLOGUE_CAMERA_UPDATE, reinterpret_cast<void*>(&Hook_CameraUpdate)));
+    g_origGetText = reinterpret_cast<GetTextFn>(
+        InstallHook(ADDR_GET_TEXT, PROLOGUE_GET_TEXT, reinterpret_cast<void*>(&Hook_GetText)));
 
     Log(g_origSetCamera    ? "Hook SetCamera installed"    : "Hook SetCamera NOT installed (unknown Game.exe version)");
     Log(g_origCameraUpdate ? "Hook CameraUpdate installed" : "Hook CameraUpdate NOT installed (unknown Game.exe version)");
+    Log(g_origGetText      ? "Hook GetText installed"      : "Hook GetText NOT installed (unknown Game.exe version)");
 }
 
 // ===== Resolution =====
@@ -296,6 +357,7 @@ void PatchResolution()
             result = "skipped";
         } else if (PatchMenuButton(button, size.width, size.height)) {
             usedWidths[i] = size.width;
+            swprintf_s(g_buttonLabels[i], L"%ux%u", size.width, size.height);
             result = "patched";
         } else {
             result = "NOT patched";
