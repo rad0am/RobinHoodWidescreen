@@ -49,7 +49,10 @@ Enabled=1
 - [ ] `RenderScale=2` gives e.g. 1720×720 at 3440×1440, the simplest way to enlarge the interface (see 2.3).
 
 ### 1.5 Menu label
-- [ ] The button still says "1024x768". Find this text (UTF-16) in the `.res` files (`DATA\`, `1045\DATA\`) and replace it in memory, e.g. by hooking the function that fetches texts. Better not to distribute modified game files.
+- [ ] The buttons still say "640x480" / "800x600" / "1024x768". Found 2026-10-30: the labels are in
+  `1045\Data\Text\Level.res` at file offset `0x367B0D` (see reverse-engineering.md, "Menu texts"), not in Game.exe.
+  Next: in Ghidra, find how the options menu gets its texts (the function that looks up a text by id) and hook it,
+  or patch the loaded string in memory after `Level.res` is read. Better not to distribute modified game files.
 
 ### 1.6 Risk: the saved resolution
 - [ ] The resolution is saved in the settings. After removing the mod, the original game will start at 3440×1440 with the zoom bug.
@@ -85,17 +88,19 @@ Plan (decided 2026-10-28): replace all three menu buttons with sizes computed fr
 | Button   | Meaning                                             | 3440×1440 | 3840×2160 | 1920×1080 |
 |----------|-----------------------------------------------------|-----------|-----------|-----------|
 | 1024x768 | native: most map                                    | 3440×1440 | 3840×2160 | 1920×1080 |
-| 800x600  | middle (height 1080, or halfway when native ≤ 1080) | 2580×1080 | 1920×1080 | 1536×864  |
-| 640x480  | big interface: height 768                           | 1834×768  | 1366×768  | 1366×768  |
+| 800x600  | middle (height 1080, or halfway when native ≤ 1080) | 2584×1080 | 1920×1080 | 1640×924  |
+| 640x480  | big interface: height 768                           | 1832×768  | 1368×768  | 1368×768  |
 
 - Height 768 instead of half (720): the interface was designed for 1024×768, so at height 768 menus, briefing and fonts have
   the original on-screen size, just wider. At 720 the main menu frame (~1024×768) probably does not fit vertically.
   Cost: scale 1.875 instead of an exact 2×, possibly slightly softer image.
-- Widths rounded to an even number. Skip a button (leave it original) if its size would be < 1024×768 or equal to another button.
-- [ ] Patch all three buttons in `PatchResolution()`: push immediate for 640x480 at VA `0x52CFAA` / `0x52CFAF`, 800x600 at
-  `0x52CFF3` / `0x52CFF8` (1024x768 already done).
-- [ ] Patch the radio selection compares in `FUN_0052D090`: `cmp eax, 0x280` (VA `0x52D0A1`, imm `0x52D0A2`), `cmp eax, 0x320` (imm `0x52D0B9`); bytes checked in Game.exe: `3D 80 02 00 00` / `3D 20 03 00 00`.
-- [ ] Test in game: sharpness at 1.875×, main menu at height 768, how much map is visible, zoom (hook should raise it as needed).
+- Widths rounded to a multiple of 8 (safer for old DirectDraw surface code; aspect error < 0.2 %). A button is skipped (left
+  original) if its size would be < 1024×768, not smaller than native, or have the same width as another button
+  (the selection compares widths only).
+- [x] 2026-10-30, v0.3: `PatchResolution()` patches all three buttons (`MENU_BUTTONS` table in `dllmain.cpp`): push immediates
+  and the radio selection compares in `FUN_0052D090` (bytes verified in Game.exe). Tested in game 2026-10-30: works.
+- [x] Check that the GOG wrapper accepts a non-standard mode such as 1832×768 in `SetDisplayMode` (with `display=desktop` it should).
+- [x] Test in game (2026-10-30, OK): sharpness at 1.875×, main menu at height 768, how much map is visible, zoom (hook should raise it as needed).
 - [ ] Requires 1.5 (button labels showing the real sizes), otherwise players cannot tell what they choose.
 - [ ] `.ini` (1.4): `Width=`/`Height=` override for an exact size; drop the `RenderScale` idea if the buttons cover it.
 

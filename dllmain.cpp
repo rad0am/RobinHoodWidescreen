@@ -10,10 +10,12 @@
 // map wraps into misaligned bands and zoom 0.5 can crash the game.
 
 #include <windows.h>
+#include <algorithm>
 #include <bit>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <iterator>
 
 namespace {
 
@@ -23,12 +25,21 @@ constexpr uintptr_t ADDR_CAMERA_UPDATE = 0x004C8380;   // Camera_Update (this in
 constexpr uintptr_t ADDR_WORLD_PTR     = 0x006C0FA8;   // pointer to the world object
 
 // ===== Resolution constants in Game.exe (operands of PUSH / CMP instructions) =====
-// Options menu (FUN_0052CF80), "1024x768" button: push 768.0f; push 1024.0f
-constexpr uintptr_t ADDR_MENU_HEIGHT   = 0x0052D039;
-constexpr uintptr_t ADDR_MENU_WIDTH    = 0x0052D03E;
-// Radio button selection (FUN_0052D090): cmp eax, 1024. Any other width logs
+// Options menu (FUN_0052CF80): each of the three buttons does "push <height>f; push <width>f".
+// Radio button selection (FUN_0052D090): "cmp eax, <width>" per button. Any other width logs
 // "Warning, unknown screen resolution." and leaves no button selected.
-constexpr uintptr_t ADDR_MENU_SELECT_W = 0x0052D0C0;
+struct MenuButton {
+    const char* label;          // text shown in the menu (comes from Level.res, not patched)
+    uint32_t    width, height;  // original resolution
+    uintptr_t   addrHeight;     // immediate of push <height>f
+    uintptr_t   addrWidth;      // immediate of push <width>f
+    uintptr_t   addrSelect;     // immediate of cmp eax, <width>
+};
+constexpr MenuButton MENU_BUTTONS[] = {
+    { "640x480",   640, 480, 0x0052CFAA, 0x0052CFAF, 0x0052D0A2 },
+    { "800x600",   800, 600, 0x0052CFF3, 0x0052CFF8, 0x0052D0B9 },
+    { "1024x768", 1024, 768, 0x0052D039, 0x0052D03E, 0x0052D0C0 },
+};
 // Settings init (FUN_0055D670), default for a new profile: push 600.0f; push 800.0f
 constexpr uintptr_t ADDR_DEFAULT_HEIGHT = 0x0055D763;
 constexpr uintptr_t ADDR_DEFAULT_WIDTH  = 0x0055D768;
@@ -49,7 +60,7 @@ constexpr size_t PROLOGUE_SIZE = 7;
 const uint8_t PROLOGUE_SET_CAMERA[PROLOGUE_SIZE]    = { 0x6A, 0xFF, 0x68, 0x1F, 0xB3, 0x66, 0x00 };
 const uint8_t PROLOGUE_CAMERA_UPDATE[PROLOGUE_SIZE] = { 0x6A, 0xFF, 0x68, 0x72, 0xC6, 0x65, 0x00 };
 
-constexpr const char* MOD_VERSION = "0.2";
+constexpr const char* MOD_VERSION = "0.3";
 
 // Appends a line to RobinHoodWidescreen.log in the game folder. The first call of each run
 // truncates the file, so the log only holds the current session.
@@ -219,30 +230,83 @@ bool GetDesktopResolution(DWORD& width, DWORD& height)
     return true;
 }
 
-// Replaces the "1024x768" menu option and the new-profile default (800x600) with the desktop
-// resolution. Game.exe on disk stays unmodified.
+// Render size with the desktop's aspect ratio for the given height. The width is rounded to a
+// multiple of 8 (old DirectDraw code and the GOG wrapper are happier with aligned surfaces);
+// the aspect ratio error is far below what is visible.
+uint32_t WidthForHeight(DWORD desktopW, DWORD desktopH, uint32_t height)
+{
+    double width = static_cast<double>(desktopW) * height / desktopH;
+    return static_cast<uint32_t>(width / 8.0 + 0.5) * 8;
+}
+
+// Points one menu button at a new resolution: both push immediates and the selection compare.
+bool PatchMenuButton(const MenuButton& button, uint32_t width, uint32_t height)
+{
+    // The compare is checked first, so a different Game.exe version fails before anything is written.
+    if (std::memcmp(reinterpret_cast<void*>(button.addrSelect), &button.width, sizeof(uint32_t)) != 0)
+        return false;
+    return PatchDword(button.addrHeight, Bits(static_cast<float>(button.height)), Bits(static_cast<float>(height)))
+        && PatchDword(button.addrWidth,  Bits(static_cast<float>(button.width)),  Bits(static_cast<float>(width)))
+        && PatchDword(button.addrSelect, button.width, width);
+}
+
+// Replaces the three menu resolutions with sizes that have the desktop's aspect ratio, and the
+// new-profile default (800x600) with the native size. Game.exe on disk stays unmodified.
+//   "640x480"  -> height 768: the interface (designed for 1024x768) keeps its original on-screen size
+//   "800x600"  -> height 1080 (or halfway between 768 and native on smaller desktops)
+//   "1024x768" -> native desktop resolution: the most map, the smallest interface
+// The GOG wrapper (display=desktop, scaling=fit) keeps the monitor in its native mode and scales
+// the smaller sizes up, so they do not have to be real display modes.
 void PatchResolution()
 {
-    DWORD width = 0, height = 0;
-    if (!GetDesktopResolution(width, height)) {
+    DWORD desktopW = 0, desktopH = 0;
+    if (!GetDesktopResolution(desktopW, desktopH)) {
         Log("Resolution: could not read the desktop resolution, menu left unchanged");
         return;
     }
-    if (width <= 1024 || height < 768) {
+    if (desktopW <= 1024 || desktopH < 768) {
         Log("Resolution: desktop is not larger than 1024x768, menu left unchanged");
         return;
     }
 
-    uint32_t w = Bits(static_cast<float>(width));
-    uint32_t h = Bits(static_cast<float>(height));
-    bool menu     = PatchDword(ADDR_MENU_HEIGHT, Bits(768.0f), h) && PatchDword(ADDR_MENU_WIDTH, Bits(1024.0f), w);
-    bool select   = PatchDword(ADDR_MENU_SELECT_W, 1024, width);
-    bool defaults = PatchDword(ADDR_DEFAULT_HEIGHT, Bits(600.0f), h) && PatchDword(ADDR_DEFAULT_WIDTH, Bits(800.0f), w);
+    uint32_t middleH = desktopH > 1080 ? 1080 : (desktopH + 768) / 2 / 2 * 2;
+    struct Size { uint32_t width, height; };
+    const Size sizes[] = {
+        { WidthForHeight(desktopW, desktopH, 768), 768 },
+        { WidthForHeight(desktopW, desktopH, middleH), middleH },
+        { desktopW, desktopH },
+    };
 
-    char msg[200];
-    snprintf(msg, sizeof(msg), "Resolution: desktop %lux%lu, menu button %s, selection %s, new profile default %s",
-             width, height, menu ? "patched" : "NOT patched", select ? "patched" : "NOT patched",
-             defaults ? "patched" : "NOT patched");
+    char msg[400];
+    int len = snprintf(msg, sizeof(msg), "Resolution: desktop %lux%lu;", desktopW, desktopH);
+    uint32_t usedWidths[3] = {};
+    for (size_t i = 0; i < std::size(MENU_BUTTONS); ++i) {
+        const MenuButton& button = MENU_BUTTONS[i];
+        Size size = sizes[i];
+
+        // The selection compares widths only, so every button needs its own width. A size smaller
+        // than the interface (1024x768) or not smaller than native (except the native button) is skipped.
+        bool isNative  = i == std::size(MENU_BUTTONS) - 1;
+        bool tooSmall  = size.width < 1024 || size.height < 768;
+        bool notSmaller = !isNative && size.height >= desktopH;
+        bool duplicate = std::find(std::begin(usedWidths), std::end(usedWidths), size.width) != std::end(usedWidths);
+
+        const char* result;
+        if (tooSmall || notSmaller || duplicate) {
+            result = "skipped";
+        } else if (PatchMenuButton(button, size.width, size.height)) {
+            usedWidths[i] = size.width;
+            result = "patched";
+        } else {
+            result = "NOT patched";
+        }
+        len += snprintf(msg + len, sizeof(msg) - len, " %s -> %ux%u %s,", button.label, size.width, size.height, result);
+    }
+
+    uint32_t w = Bits(static_cast<float>(desktopW));
+    uint32_t h = Bits(static_cast<float>(desktopH));
+    bool defaults = PatchDword(ADDR_DEFAULT_HEIGHT, Bits(600.0f), h) && PatchDword(ADDR_DEFAULT_WIDTH, Bits(800.0f), w);
+    snprintf(msg + len, sizeof(msg) - len, " new profile default %s", defaults ? "patched" : "NOT patched");
     Log(msg);
 }
 

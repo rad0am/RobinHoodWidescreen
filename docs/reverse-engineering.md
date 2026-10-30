@@ -109,13 +109,41 @@ The menu (`0x52CF80`) passes the resolution as `push float` (`68` + 4 bytes), he
 | 800x600 | `0x12CFF2` / `0x12CFF7` | `0x52CFF2` / `0x52CFF7` | `68 00 00 16 44` / `68 00 00 48 44` | unchanged |
 | 1024x768 | `0x12D038` / `0x12D03D` | `0x52D038` / `0x52D03D` | `68 00 00 40 44` / `68 00 00 80 44` | `68 00 00 B4 44` (1440.0) / `68 00 00 57 45` (3440.0) |
 
-Since 2026-10-28 `Game.exe` is original again; `PatchResolution()` in the DLL writes the desktop resolution in memory into:
+Since 2026-10-28 `Game.exe` is original again; `PatchResolution()` in the DLL writes the new sizes in memory
+(since v0.3 all three buttons: 640x480 → height 768, 800x600 → height 1080, 1024x768 → native, all with the desktop's aspect ratio):
 
 | What | VA (immediate) | Original |
 |---|---|---|
+| 640x480 button height / width | `0x52CFAA` / `0x52CFAF` | 480.0f / 640.0f |
+| 800x600 button height / width | `0x52CFF3` / `0x52CFF8` | 600.0f / 800.0f |
 | 1024x768 button height / width | `0x52D039` / `0x52D03E` | 768.0f / 1024.0f |
-| Radio selection `cmp eax, 0x400` in `FUN_0052D090` | `0x52D0C0` | `00 04 00 00` (unknown width → "Warning, unknown screen resolution.") |
+| Radio selection in `FUN_0052D090`: `cmp eax, 0x280` / `0x320` / `0x400` | `0x52D0A2` / `0x52D0B9` / `0x52D0C0` | 640 / 800 / 1024 (u32). Unknown width → "Warning, unknown screen resolution." |
 | New profile default height / width (`FUN_0055d670`) | `0x55D763` / `0x55D768` | 600.0f / 800.0f |
+
+`FUN_0052D090` (radio selection): `fld [this+0xDC0]` (the menu's copy of the selected width) → `__ftol` → compares
+**only the width** with 640 / 800 / 1024. So every button must have a distinct width.
+
+### Other resolution constants (searched 2026-10-30, `.text` only)
+
+Byte-pattern search over Game.exe for the integer and float forms of 640/800/1024/480/600/768:
+
+| Pattern | Hits | Notes |
+|---|---|---|
+| `cmp eax, 0x280` | `0x52D0A1` only | radio selection |
+| `cmp eax, 0x320` | `0x52D0B8`, **`0x5A8107`** | `0x5A8107`: `cmp eax, 800; jae ...` in an unknown function, maybe a layout/asset choice for widths ≥ 800. Not a problem for our sizes (all ≥ 1024), worth a look in Ghidra |
+| `cmp eax, 0x400` | `0x52D0BF`, `0x648A58` | `0x648A58` = CRT FPU control word, unrelated |
+| float 768.0 / 1024.0 | `0x52D039` / `0x52D03E` only | 1024x768 button. **No** UI code uses 1024×768 as a constant |
+| float 600.0 + 800.0 pairs | `0x51B9A6`/`0x51B9AB`, `0x52CFF3`/`0x52CFF8`, `0x55D763`/`0x55D768` | `0x51B9A0`: a constructor (`mov esi, ecx; push 600.0; push 800.0`) — probably the settings object's default before loading. Not patched (the loaded/initialized value overrides it) |
+| float 480.0 + 640.0 pairs `push 480.0; push 640.0; push 0; push 0; call` | `0x52C61D`, `0x52D7BE`, `0x52E51F`, `0x53083D`, `0x536D9D`, `0x5388CE`, `0x53EA4E`, `0x53FE3F`, `0x541AE1` (+ `0x52CFAA` button) | a **rectangle (0, 0, 640, 480)** built in many menu screens (`0x52C...`–`0x541...` = the `RHMenu*` code). Candidate for a virtual 640×480 coordinate space of menu dialogs → lead for TODO 2.1/2.2 (pause menu, briefing) |
+| integer 640 (`80 02 00 00`) | 36 hits | includes `0x40B797` (`push 280h` for the intro/outro videos at 640×480) — not touched by the mod |
+
+## Menu texts (`1045\Data\Text\Level.res`)
+
+The resolution button labels are **not** in Game.exe (no ASCII/UTF-16 hit), only in the Polish `Level.res`, at file offset
+`0x367AF5` (offsets below point at the length prefix): a list of length-prefixed UTF-16 strings (`u16 length` + characters, no terminator), not aligned to 2 bytes:
+`"Rozdzielczość"` (len 13), `"640x480"` (`0x367B0D`), `"800x600"` (`0x367B1D`), `"1024x768"` (`0x367B2D`), then
+`"Efekty specjalne"`, `"Pole widzenia alfa"`, `"Przezroczyste cienie"`, `"Efekty animacyjne"`, ... (the options screen).
+The entry that holds this list has not been identified yet (the simple 3-string `TEXT` layout does not match here).
 
 Float bytes: `[BitConverter]::GetBytes([single]3440)`. 3440 = `0x45570000`, 1440 = `0x44B40000`, 3840 = `0x45700000`,
 2160 = `0x45070000`, 1720 = `0x44D70000`, 720 = `0x44340000`.

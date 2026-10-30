@@ -4,13 +4,13 @@ A mod for **Robin Hood: The Legend of Sherwood** (GOG release, `Game.exe` 1.1.0.
 at widescreen and UHD resolutions (tested: 3440×1440, 21:9 ultrawide). The original `Game.exe` stays unmodified:
 everything is done in memory by `dinput.dll`.
 
-## Status (2026-10-30, version 0.2)
+## Status (2026-10-30, version 0.3)
 
 | Item | Status |
 |---|---|
 | Game running at the desktop resolution (native rendering, not upscaling) | ✅ works, set by the DLL, `Game.exe` unmodified |
 | Zoom fix (map split into bands, crash when zoomed out) | ✅ works |
-| More resolution choices (three buttons sized from the monitor), button labels | ❌ to do, see [TODO.md](TODO.md) |
+| More resolution choices (three buttons sized from the monitor) | ✅ works (v0.3). Labels still say 640x480 / 800x600 / 1024x768 |
 | `.ini` file (custom resolution, monitor choice) | ❌ to do |
 | Interface: pause menu, briefing window, fonts | ❌ to do |
 | Package for other players (Release build, instructions) | ❌ to do |
@@ -69,8 +69,8 @@ Requirements: **Build Tools for Visual Studio** (workload "Desktop development w
 4. If a resolution was saved earlier, pick the "1024x768" button in the options: it now sets the desktop resolution.
 5. The mod log is `RobinHoodWidescreen.log` in the game folder, cleared on every start. A correct start looks like this:
    ```
-   RobinHoodWidescreen 0.2 loaded
-   Resolution: desktop 3440x1440, menu button patched, selection patched, new profile default patched
+   RobinHoodWidescreen 0.3 loaded
+   Resolution: desktop 3440x1440; 640x480 -> 1832x768 patched, 800x600 -> 2584x1080 patched, 1024x768 -> 3440x1440 patched, new profile default patched
    Hook SetCamera installed
    Hook CameraUpdate installed
    [SetCamera] zoom 1.00 -> 2.00 (needed >= 1.168, screen 3440x1440, map 2944x2176)
