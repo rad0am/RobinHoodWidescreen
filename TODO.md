@@ -15,10 +15,10 @@ Without this the mod cannot be distributed, because a modified `Game.exe` must n
 ### 1.2 Patch in memory instead of in the file
 - [x] `PatchResolution()` in `DllMain` replaces the floats of the 1024x768 menu button (`0x52CF80`):
   height immediate at VA `0x52D039`, width at VA `0x52D03E`. Original bytes are checked before writing (`PatchValue`).
-- [x] New profile default (800×600 in `FUN_0055d670`): immediates at VA `0x55D763` (600.0) / `0x55D768` (800.0) → desktop resolution.
+- [x] New profile default (800×600 in `FUN_0055d670`): immediate at VA `0x55D763` (600.0) / `0x55D768` (800.0) → desktop resolution.
 - [x] `cmp eax, 0x400` at VA `0x52D0BF` (imm `0x52D0C0`) = `FUN_0052D090`, selects the radio button for the current width
   (640/800/1024). Any other width logs "Warning, unknown screen resolution." (`RHMenuGraphics.cpp`) and selects nothing → patched to the desktop width.
-- [x] Tested 2026-10-28: a clean install starts at the desktop resolution. A resolution already saved in the settings is kept
+- [x] Tested 2026-10-28: a clean installation starts at the desktop resolution. A resolution already saved in the settings is kept
   (by design: the player's choice wins, the native one is on the menu button). Side effect: a saved 1024x768 matches no button,
   so nothing is selected until the player picks one. Mention in the README; maybe an `.ini` option `ForceDesktop=1` (1.4).
 - [x] Dropped: the engine's own path (`FUN_0055d670` takes the desktop resolution from `FUN_005e56c0` / `FUN_005e5750`
@@ -30,7 +30,7 @@ Without this the mod cannot be distributed, because a modified `Game.exe` must n
   (physical mode, not `GetSystemMetrics`, which is DPI-scaled for a non-DPI-aware game). Desktops ≤ 1024 wide or < 768 high leave the menu unchanged.
 - [ ] An `.ini` option to pick the monitor (index from `EnumDisplayDevicesW`) for people who play on a non-primary display. Check whether the GOG wrapper can display on a monitor other than the primary one at all.
 - [ ] Cases to test: two monitors with different resolutions (e.g. 3440×1440 primary + 1920×1080), a monitor rotated to portrait, the primary monitor changing between runs, DPI scaling at 100/125/150%.
-- [ ] GOG wrapper: `dxcfg.ini` has `display=3440x1440@165`. Check whether `dxcfg.exe` has a "desktop resolution" option. Otherwise every player has to set up the wrapper by hand (document it in the instructions).
+- [ ] GOG wrapper: `dxcfg.ini` has `display=3440x1440@165`. Check whether `dxcfg.exe` has a "desktop resolution" option. Otherwise, every player has to set up the wrapper by hand (document it in the instructions).
 
 ### 1.4 Config file `RobinHoodWidescreen.ini`
 Proposal:
@@ -82,17 +82,17 @@ The Windows mode list is not useful (most entries have a different aspect ratio 
 
 Plan (decided 2026-10-28): replace all three menu buttons with sizes computed from the desktop resolution, same aspect ratio:
 
-| Button | Meaning | 3440×1440 | 3840×2160 | 1920×1080 |
-|---|---|---|---|---|
-| 1024x768 | native: most map | 3440×1440 | 3840×2160 | 1920×1080 |
-| 800x600 | middle (height 1080, or halfway when native ≤ 1080) | 2580×1080 | 1920×1080 | 1536×864 |
-| 640x480 | big interface: height 768 | 1834×768 | 1366×768 | 1366×768 |
+| Button   | Meaning                                             | 3440×1440 | 3840×2160 | 1920×1080 |
+|----------|-----------------------------------------------------|-----------|-----------|-----------|
+| 1024x768 | native: most map                                    | 3440×1440 | 3840×2160 | 1920×1080 |
+| 800x600  | middle (height 1080, or halfway when native ≤ 1080) | 2580×1080 | 1920×1080 | 1536×864  |
+| 640x480  | big interface: height 768                           | 1834×768  | 1366×768  | 1366×768  |
 
 - Height 768 instead of half (720): the interface was designed for 1024×768, so at height 768 menus, briefing and fonts have
   the original on-screen size, just wider. At 720 the main menu frame (~1024×768) probably does not fit vertically.
   Cost: scale 1.875 instead of an exact 2×, possibly slightly softer image.
 - Widths rounded to an even number. Skip a button (leave it original) if its size would be < 1024×768 or equal to another button.
-- [ ] Patch all three buttons in `PatchResolution()`: push immediates for 640x480 at VA `0x52CFAA` / `0x52CFAF`, 800x600 at
+- [ ] Patch all three buttons in `PatchResolution()`: push immediate for 640x480 at VA `0x52CFAA` / `0x52CFAF`, 800x600 at
   `0x52CFF3` / `0x52CFF8` (1024x768 already done).
 - [ ] Patch the radio selection compares in `FUN_0052D090`: `cmp eax, 0x280` (VA `0x52D0A1`, imm `0x52D0A2`), `cmp eax, 0x320` (imm `0x52D0B9`); bytes checked in Game.exe: `3D 80 02 00 00` / `3D 20 03 00 00`.
 - [ ] Test in game: sharpness at 1.875×, main menu at height 768, how much map is visible, zoom (hook should raise it as needed).
