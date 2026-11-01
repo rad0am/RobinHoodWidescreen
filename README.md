@@ -61,7 +61,7 @@ Details: [docs/reverse-engineering.md](docs/reverse-engineering.md).
 | `exports.def`                 | undecorated exports: `DirectInputCreateA`, `DirectInputCreateW`, `DirectInputCreateEx`             |
 | `CMakeLists.txt`              | build: 32-bit, static CRT, output file `dinput.dll`                                                |
 | `docs/reverse-engineering.md` | addresses, structures and findings                                                                 |
-| `TODO.md`                     | remaining work                                                                                     |
+| `TODO.md`                     | remaining work (short list, details in `docs/`)                                                    |
 
 ## Building
 
