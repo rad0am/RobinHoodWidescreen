@@ -76,6 +76,7 @@ constexpr uint32_t OFF_SCREEN_H = 0x472C;   // float, screen height in pixels
 constexpr uint32_t OFF_MAP_W    = 0x4730;   // float, map width in pixels
 constexpr uint32_t OFF_MAP_H    = 0x4734;   // float, map height in pixels
 constexpr uint32_t OFF_ZOOM     = 0x475C;   // float, 0.5 / 1.0 / 2.0
+constexpr uint32_t OFF_ZOOM_IDX = 0x4898;   // u16, index of the zoom level in the table at +0x489C (0..2); the zoom keys change it
 constexpr float    HUD_HEIGHT   = 80.0f;    // bottom interface bar, the map is not drawn under it
 
 // ===== Function prologues replaced by the hooks =====
@@ -116,7 +117,7 @@ struct GameWString {
 };
 static_assert(sizeof(GameWString) == 16, "must match the game's std::wstring");
 
-constexpr const char* MOD_VERSION = "0.5.1";
+constexpr const char* MOD_VERSION = "0.5.2";
 
 // Appends a line to RobinHoodWidescreen.log in the game folder. The first call of each run
 // truncates the file, so the log only holds the current session.
@@ -162,15 +163,22 @@ void EnsureZoomFits(const char* caller)
 
     // Zooming in only shrinks the view, so the camera position stays inside the map.
     float oldZoom = zoom;
-    zoom = 2.0f;                                         // fallback: the largest level the game supports
+    // The zoom keys and the zoom animation work with the level index, not with the float: they step the
+    // index and read the zoom from the table. The index must follow the new zoom, otherwise the next
+    // zoom key animates from a wrong level (after 3440 -> 1832 the map was drawn far too close).
     constexpr float levels[] = { 0.5f, 1.0f, 2.0f };
-    for (float level : levels) {
-        if (level >= needed) { zoom = level; break; }    // the smallest level that fits
+    uint16_t index = 2;                                  // fallback: the largest level the game supports
+    for (uint16_t i = 0; i < 3; ++i) {
+        if (levels[i] >= needed) { index = i; break; }   // the smallest level that fits
     }
+    zoom = levels[index];
+    auto& zoomIndex = Field<uint16_t>(world, OFF_ZOOM_IDX);
+    uint16_t oldIndex = zoomIndex;
+    zoomIndex = index;
 
-    char msg[160];
-    snprintf(msg, sizeof(msg), "[%s] zoom %.2f -> %.2f (needed >= %.3f, screen %.0fx%.0f, map %.0fx%.0f)",
-             caller, oldZoom, zoom, needed, screenW, screenH, mapW, mapH);
+    char msg[200];
+    snprintf(msg, sizeof(msg), "[%s] zoom %.2f -> %.2f, index %u -> %u (needed >= %.3f, screen %.0fx%.0f, map %.0fx%.0f)",
+             caller, oldZoom, zoom, oldIndex, index, needed, screenW, screenH, mapW, mapH);
     Log(msg);
 }
 

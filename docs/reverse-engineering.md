@@ -64,8 +64,8 @@ The resolution is **saved to disk** together with the settings (file not identif
 | `+0x4734`            | float   | map height (px). Mission 1: 2176                                                     |
 | `+0x475C`            | float   | **zoom**: 0.5 (zoomed out), 1.0, 2.0 (zoomed in)                                     |
 | `+0x4760`            | float   | previous zoom                                                                        |
-| `+0x4898`            | u16     | index into the zoom transition table                                                 |
-| `+0x489C`, `+0x48A0` | float[] | zoom transition table (from / to)                                                    |
+| `+0x4898`            | u16     | **zoom level index** 0..2 into the table at `+0x489C`; the zoom keys step it (`FUN_004dbe40` in, `FUN_004dbdb0` out) |
+| `+0x489C`            | float[3] | zoom levels 0.5 / 1.0 / 2.0. The zoom animation goes from `table[index±1]` to `table[index]`, so the index must match `+0x475C` (the mod sets both) |
 | `+0x48C0`            | byte    | camera state machine state (`switch` in `Camera_Update`, case 3 = zoom animation)    |
 | `+0x4B3C`            | byte    | flag checked while drawing                                                           |
 | `+0x4BD0..+0x4BD8`   | float×3 | probably the camera position (x, y, height)                                          |
