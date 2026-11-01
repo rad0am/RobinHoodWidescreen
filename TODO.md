@@ -69,14 +69,22 @@ Observations at 3440×1440 (screenshots from 2026-10-23):
 - in-game HUD: elements anchored to the corners (OK), an 80 px black strip at the bottom between the ornaments,
 - mission texts and money in the top-left corner: small.
 
-### 2.1 Center the pause menu
-- [ ] Find the code that creates the pause menu buttons: the labels "Kontynuuj" (Continue), "Zapisz" (Save), "Powtórz misję" (Restart mission) are in `.res` → text id → the code that uses it.
-- [ ] Find out whether the positions are in code (constants) or in data (`DATA\Interface\Default.res`, `BTTN` block, zlib, unknown format).
-- [ ] Shift the position by `(screen − 1024) / 2` or center it on the screen.
-
-### 2.2 Bigger briefing window and fonts
-- [ ] Find the drawing of the scroll (bitmap + text) and the fonts (`DATA\Interface\Fonts\MANAGER.CFG`).
-- [ ] Real interface scaling in the engine is hard (every element separately). Only consider it after 2.3.
+### 2.1 + 2.2 Dialogs at the size they have at height 768 — done (v0.5, 2026-11-01)
+Dialogs (briefing scroll, pause menu, options, nested dialogs, mission summary) are laid out for a virtual screen of height 768
+with the monitor's aspect ratio and stretched over the real screen; the map keeps the full resolution. `scale = screen height / 768`
+(3440×1440 → 1832×768 ×1.875, 1920×1080 → 1368×768 ×1.406; off at 768 and below). How it works:
+[docs/reverse-engineering.md](docs/reverse-engineering.md#dialog-scaling-v05).
+Tested at 3440×1440: briefing, pause menu, options, mission summary, mouse and cursor in dialogs, map clicks after closing,
+main menu after leaving a mission (unchanged, as intended).
+- [x] Mission summary: opens without the window layer, so the dialog mode now starts when a known dialog start asks for the
+  screen size (`DIALOG_START_CALLERS`), not at the snapshot. Giving the virtual size to all menu code in a mission also broke the
+  main menu built right after a mission (the world pointer is still set then) — removed.
+- [ ] Main menu and its dialogs (scaling is limited to missions: the main menu has its own centered 1024×768 frame).
+- [ ] HUD (bottom bar, money/objectives text in the corner) is still drawn at the real size (it is not a dialog).
+- [ ] `.ini`: turn dialog scaling off, or choose the design height (768) / a fixed scale.
+- [ ] Image quality of the stretch: DirectDraw/the GOG wrapper decides the filter (nearest or bilinear).
+- [ ] Other missions: if a dialog stays small, the log names the menu code that asked for the screen size
+  ("Screen size asked by menu code at ..."); add it to `DIALOG_START_CALLERS`.
 
 ### 2.3 Simplest enlargement: render at a lower resolution (three buttons = three interface sizes)
 With `display=desktop` in `dxcfg.ini` the monitor always stays at its native mode and the wrapper scales whatever the game

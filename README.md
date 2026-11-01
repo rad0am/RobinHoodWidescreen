@@ -4,15 +4,16 @@ A mod for **Robin Hood: The Legend of Sherwood** (GOG release, `Game.exe` 1.1.0.
 at widescreen and UHD resolutions (tested: 3440×1440, 21:9 ultrawide). The original `Game.exe` stays unmodified:
 everything is done in memory by `dinput.dll`.
 
-## Status (2026-10-30, version 0.4)
+## Status (2026-11-01, version 0.5)
 
 | Item | Status |
 |---|---|
 | Game running at the desktop resolution (native rendering, not upscaling) | ✅ works, set by the DLL, `Game.exe` unmodified |
 | Zoom fix (map split into bands, crash when zoomed out) | ✅ works |
 | More resolution choices (three buttons sized from the monitor) | ✅ works (v0.3), buttons labelled with the real sizes (v0.4) |
-| `.ini` file (custom resolution, monitor choice) | ❌ to do |
-| Interface: pause menu, briefing window, fonts | ❌ to do |
+| Dialogs (briefing, pause menu, options, mission summary) at the size they have at height 768 | ✅ works in missions (v0.5) |
+| `.ini` file (custom resolution, monitor choice, dialog scaling on/off) | ❌ to do |
+| Main menu, HUD | ❌ still at the real size |
 | Package for other players (Release build, instructions) | ❌ to do |
 
 ## How it works
@@ -34,6 +35,19 @@ everything is done in memory by `dinput.dll`.
    does not fit on the map, assuming 1.0 always fits. At 3440 px width that is false (the mission 1 map is 2944×2176), which
    caused the bands and the crash. The mod hooks this function and `Camera_Update` (`0x4C8380`) and, before they run,
    raises the zoom to the smallest level that fits.
+4. **Dialogs:** the interface was designed for 1024×768, so at high resolutions the dialogs are tiny. While a dialog is open
+   (from the moment the dialog code asks for the screen size until its modal loop returns), the mod gives the game a **virtual screen
+   of height 768** with the monitor's aspect ratio: the dialog is laid out and drawn there, the mouse is converted to it, and
+   before each frame is shown the virtual screen is stretched over the real one. The map keeps the full resolution.
+   It adapts to any monitor: `scale = screen height / 768`.
+
+   | Resolution | Dialogs look like at | Scale |
+   |---|---|---|
+   | 3440×1440 | 1832×768 | 1.875 |
+   | 2560×1440 | 1368×768 | 1.875 |
+   | 1920×1080 | 1368×768 | 1.406 |
+   | 3840×2160 | 1368×768 | 2.81 |
+   | 1024×768 and below | (unchanged) | off |
 
 Every patch first compares the original bytes, so with a different `Game.exe` version nothing is changed (the log says so).
 
@@ -43,7 +57,7 @@ Details: [docs/reverse-engineering.md](docs/reverse-engineering.md).
 
 | File | Contents |
 |---|---|
-| `dllmain.cpp` | the whole mod: resolution patches, hooks, zoom logic, DirectInput proxy, `DllMain` |
+| `dllmain.cpp` | the whole mod: resolution patches, hooks, zoom logic, dialog scaling, DirectInput proxy, `DllMain` |
 | `exports.def` | undecorated exports: `DirectInputCreateA`, `DirectInputCreateW`, `DirectInputCreateEx` |
 | `CMakeLists.txt` | build: 32-bit, static CRT, output file `dinput.dll` |
 | `docs/reverse-engineering.md` | addresses, structures and findings |
@@ -71,14 +85,21 @@ Requirements: **Build Tools for Visual Studio** (workload "Desktop development w
 4. If a resolution was saved earlier, pick one of the resolution buttons in the options (the biggest one is native).
 5. The mod log is `RobinHoodWidescreen.log` in the game folder, cleared on every start. A correct start looks like this:
    ```
-   RobinHoodWidescreen 0.4 loaded
+   RobinHoodWidescreen 0.5 loaded
    Resolution: desktop 3440x1440; 640x480 -> 1832x768 patched, 800x600 -> 2584x1080 patched, 1024x768 -> 3440x1440 patched, new profile default patched
    Hook SetCamera installed
-   Hook CameraUpdate installed
-   Hook GetText installed
+   ...
+   Hook GetSurfaceHeight installed
+   Dialog scaling enabled
    [SetCamera] zoom 1.00 -> 2.00 (needed >= 1.168, screen 3440x1440, map 2944x2176)
+   Dialogs: virtual screen 1832x768 (scale 1.875), surfaces 1424 and 1425
+   Dialog opened (modal depth 0)
+   Dialog closed (modal loop ended)
    ```
-   The `zoom` line appears only when the mod has to change the zoom.
+   The `zoom` line appears only when the mod has to change the zoom, the `Dialogs` line with the first dialog, then one
+   `Dialog opened` / `Dialog closed` pair per dialog. A line `Screen size asked by menu code at ...` points at a screen that the mod
+   does not recognise as a dialog (useful if a dialog ever stays small). If the game crashes, `[Crash]` lines at the end of the
+   log show where.
 6. Uninstalling: switch the resolution to 800x600 in the options, then delete `dinput.dll` (see the notes below).
 
 ## Important notes
