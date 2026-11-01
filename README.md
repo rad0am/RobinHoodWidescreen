@@ -6,15 +6,15 @@ everything is done in memory by `dinput.dll`.
 
 ## Status (2026-11-01, version 0.5)
 
-| Item | Status |
-|---|---|
-| Game running at the desktop resolution (native rendering, not upscaling) | ✅ works, set by the DLL, `Game.exe` unmodified |
-| Zoom fix (map split into bands, crash when zoomed out) | ✅ works |
-| More resolution choices (three buttons sized from the monitor) | ✅ works (v0.3), buttons labelled with the real sizes (v0.4) |
-| Dialogs (briefing, pause menu, options, mission summary) at the size they have at height 768 | ✅ works in missions (v0.5) |
-| `.ini` file (custom resolution, monitor choice, dialog scaling on/off) | ❌ to do |
-| Main menu, HUD | ❌ still at the real size |
-| Package for other players (Release build, instructions) | ❌ to do |
+| Item                                                                                         | Status                                                       |
+|----------------------------------------------------------------------------------------------|--------------------------------------------------------------|
+| Game running at the desktop resolution (native rendering, not upscaling)                     | ✅ works, set by the DLL, `Game.exe` unmodified              |
+| Zoom fix (map split into bands, crash when zoomed out)                                       | ✅ works                                                     |
+| More resolution choices (three buttons sized from the monitor)                               | ✅ works (v0.3), buttons labelled with the real sizes (v0.4) |
+| Dialogs (briefing, pause menu, options, mission summary) at the size they have at height 768 | ✅ works in missions (v0.5)                                  |
+| `.ini` file (custom resolution, monitor choice, dialog scaling on/off)                       | ❌ to do                                                     |
+| Main menu, HUD                                                                               | ❌ still at the real size                                    |
+| Package for other players (Release build, instructions)                                      | ❌ to do                                                     |
 
 ## How it works
 
@@ -41,13 +41,13 @@ everything is done in memory by `dinput.dll`.
    before each frame is shown the virtual screen is stretched over the real one. The map keeps the full resolution.
    It adapts to any monitor: `scale = screen height / 768`.
 
-   | Resolution | Dialogs look like at | Scale |
-   |---|---|---|
-   | 3440×1440 | 1832×768 | 1.875 |
-   | 2560×1440 | 1368×768 | 1.875 |
-   | 1920×1080 | 1368×768 | 1.406 |
-   | 3840×2160 | 1368×768 | 2.81 |
-   | 1024×768 and below | (unchanged) | off |
+   | Resolution         | Dialogs look like at | Scale |
+   |--------------------|----------------------|-------|
+   | 3440×1440          | 1832×768             | 1.875 |
+   | 2560×1440          | 1368×768             | 1.875 |
+   | 1920×1080          | 1368×768             | 1.406 |
+   | 3840×2160          | 1368×768             | 2.81  |
+   | 1024×768 and below | (unchanged)          | off   |
 
 Every patch first compares the original bytes, so with a different `Game.exe` version nothing is changed (the log says so).
 
@@ -55,13 +55,13 @@ Details: [docs/reverse-engineering.md](docs/reverse-engineering.md).
 
 ## Files
 
-| File | Contents |
-|---|---|
-| `dllmain.cpp` | the whole mod: resolution patches, hooks, zoom logic, dialog scaling, DirectInput proxy, `DllMain` |
-| `exports.def` | undecorated exports: `DirectInputCreateA`, `DirectInputCreateW`, `DirectInputCreateEx` |
-| `CMakeLists.txt` | build: 32-bit, static CRT, output file `dinput.dll` |
-| `docs/reverse-engineering.md` | addresses, structures and findings |
-| `TODO.md` | remaining work |
+| File                          | Contents                                                                                           |
+|-------------------------------|----------------------------------------------------------------------------------------------------|
+| `dllmain.cpp`                 | the whole mod: resolution patches, hooks, zoom logic, dialog scaling, DirectInput proxy, `DllMain` |
+| `exports.def`                 | undecorated exports: `DirectInputCreateA`, `DirectInputCreateW`, `DirectInputCreateEx`             |
+| `CMakeLists.txt`              | build: 32-bit, static CRT, output file `dinput.dll`                                                |
+| `docs/reverse-engineering.md` | addresses, structures and findings                                                                 |
+| `TODO.md`                     | remaining work                                                                                     |
 
 ## Building
 
@@ -98,7 +98,7 @@ Requirements: **Build Tools for Visual Studio** (workload "Desktop development w
    ```
    The `zoom` line appears only when the mod has to change the zoom, the `Dialogs` line with the first dialog, then one
    `Dialog opened` / `Dialog closed` pair per dialog. A line `Screen size asked by menu code at ...` points at a screen that the mod
-   does not recognise as a dialog (useful if a dialog ever stays small). If the game crashes, `[Crash]` lines at the end of the
+   does not recognize as a dialog (useful if a dialog ever stays small). If the game crashes, `[Crash]` lines at the end of the
    log show where.
 6. Uninstalling: switch the resolution to 800x600 in the options, then delete `dinput.dll` (see the notes below).
 

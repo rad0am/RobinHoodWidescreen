@@ -116,7 +116,7 @@ struct GameWString {
 };
 static_assert(sizeof(GameWString) == 16, "must match the game's std::wstring");
 
-constexpr const char* MOD_VERSION = "0.5";
+constexpr const char* MOD_VERSION = "0.5.1";
 
 // Appends a line to RobinHoodWidescreen.log in the game folder. The first call of each run
 // truncates the file, so the log only holds the current session.
@@ -266,9 +266,13 @@ ScreenSizes GetScreenSizes()
 // Dialogs are scaled only in a mission and only when the screen is taller than the interface. (The
 // world pointer is still set for a moment after leaving a mission, which is why only the known dialog
 // starts switch the mode on, not any menu code.)
+// A mission dialog always opens outside any modal loop (a dialog opened from a dialog finds the mode
+// already on). A dialog start inside a modal loop is a menu dialog: the main menu after a mission is
+// itself a modal loop, and its quit question uses the same scroll as the mission dialogs.
 bool DialogScalingWanted()
 {
-    return g_dialogHooksOk && *reinterpret_cast<uintptr_t*>(ADDR_WORLD_PTR) != 0 && GetScreenSizes().scale > 1.0f;
+    return g_dialogHooksOk && g_modalDepth == 0 && *reinterpret_cast<uintptr_t*>(ADDR_WORLD_PTR) != 0
+        && GetScreenSizes().scale > 1.0f;
 }
 
 // Screen size fields of SBDrawManager. The clipping helper 0x5E6000 clips every software blit against
