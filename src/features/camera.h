@@ -7,4 +7,7 @@ namespace rhw::camera {
 
 void Install();
 
+// Writes the world state (camera, zoom, map, grid) to the log; called from the crash reporter.
+void LogCrashState();
+
 }  // namespace rhw::camera

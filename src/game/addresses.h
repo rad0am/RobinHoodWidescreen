@@ -12,7 +12,8 @@ namespace rhw {
 constexpr uintptr_t ADDR_SET_CAMERA    = 0x005758D0;   // Camera_SetPositionClamped (cdecl)
 constexpr uintptr_t ADDR_CAMERA_UPDATE = 0x004C8380;   // Camera_Update (this in ECX), runs every frame
 constexpr uintptr_t ADDR_CAN_ZOOM_OUT  = 0x004C7CF0;   // World_CanZoomOut (this = world in ECX) -> AL, asked by the zoom out key
-constexpr uintptr_t ADDR_WORLD_PTR     = 0x006C0FA8;   // pointer to the world object
+constexpr uintptr_t ADDR_GRID_CELL     = 0x004E89D0;   // Grid_CollectObjectsInCell (this = world in ECX): (std::list* out, int cellIndex, uint mask), RET 0xC
+constexpr uintptr_t ADDR_WORLD_PTR    = 0x006C0FA8;   // pointer to the world object
 constexpr uintptr_t ADDR_GET_TEXT      = 0x006009E0;   // Resource_GetText (this in ECX): string <index> of TEXT <id>
 constexpr uintptr_t ADDR_WSTRING_GROW  = 0x004239E0;   // std::wstring::_Grow(n, trim) of the game's CRT (this in ECX)
 constexpr uintptr_t ADDR_BLIT          = 0x005E6440;   // SBDrawManager::Blit (this in ECX): IDirectDrawSurface7::Blt wrapper
@@ -43,6 +44,14 @@ constexpr uint32_t OFF_MAP_H    = 0x4734;   // float, map height in pixels
 constexpr uint32_t OFF_ZOOM     = 0x475C;   // float, 0.5 / 1.0 / 2.0
 constexpr uint32_t OFF_ZOOM_IDX = 0x4898;   // u16, index of the zoom level in the table at +0x489C (0..2); the zoom keys change it
 constexpr uint32_t OFF_ZOOM_LEVELS = 0x489C;   // float[3], zoom levels 0.5 / 1.0 / 2.0
+constexpr uint32_t OFF_GRID_CELLS = 0x403C;   // ptr, array of 0x28-byte cells
+constexpr uint32_t OFF_GRID_W     = 0x3E98;   // u16, grid width in cells (64 px each)
+constexpr uint32_t OFF_GRID_H     = 0x3E9A;   // u16, grid height in cells
+constexpr uint32_t OFF_CAM_STATE  = 0x48C0;   // byte, camera state machine
+constexpr uint32_t OFF_CAM_POS    = 0x4BD0;   // float x3, probably the camera position
+constexpr uint32_t OFF_CAM_TOPLEFT = 0x4738;  // float x2, camera position passed to the world render (hypothesis, see the log)
+constexpr uint32_t OFF_CAM_CENTER = 0x4750;   // float x2, requested camera center (argument of Camera_SetPositionClamped in FUN_004C0040)
+constexpr uint32_t GRID_CELL_SIZE = 0x28;
 constexpr float    HUD_HEIGHT   = 80.0f;    // bottom interface bar, the map is not drawn under it
 
 // ===== Resolution constants (operands of PUSH / CMP instructions) =====
@@ -78,6 +87,8 @@ constexpr uintptr_t ADDR_DEFAULT_WIDTH  = 0x0055D768;
 inline constexpr uint8_t PROLOGUE_SET_CAMERA[7]    = { 0x6A, 0xFF, 0x68, 0x1F, 0xB3, 0x66, 0x00 };
 inline constexpr uint8_t PROLOGUE_CAMERA_UPDATE[7] = { 0x6A, 0xFF, 0x68, 0x72, 0xC6, 0x65, 0x00 };
 inline constexpr uint8_t PROLOGUE_BLIT[7]          = { 0x6A, 0xFF, 0x68, 0xC8, 0x28, 0x67, 0x00 };
+// Grid_CollectObjectsInCell, 5 bytes: PUSH ECX; MOV EAX, [ESP+0xC]
+inline constexpr uint8_t PROLOGUE_GRID_CELL[5]     = { 0x51, 0x8B, 0x44, 0x24, 0x0C };
 // World_CanZoomOut, 6 bytes: FLD dword [ECX+0x475C]
 inline constexpr uint8_t PROLOGUE_CAN_ZOOM_OUT[6]  = { 0xD9, 0x81, 0x5C, 0x47, 0x00, 0x00 };
 // Present reads the SEH list first, 8 bytes: MOV EAX, FS:[0]; PUSH -1

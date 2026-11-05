@@ -5,6 +5,7 @@
 #include <cstdio>
 
 #include "core/log.h"
+#include "features/camera.h"
 #include "features/dialog_scaling.h"
 #include "game/addresses.h"
 
@@ -30,6 +31,7 @@ LONG CALLBACK CrashReporter(EXCEPTION_POINTERS* info)
              ctx->Eax, ctx->Ebx, ctx->Ecx, ctx->Edx, ctx->Esi, ctx->Edi, ctx->Ebp, ctx->Esp);
     Log(msg);
     dialogs::LogCrashState();
+    camera::LogCrashState();
 
     auto* stack = reinterpret_cast<const uint32_t*>(ctx->Esp);
     int len = snprintf(msg, sizeof(msg), "[Crash] stack:");

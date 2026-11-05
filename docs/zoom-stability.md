@@ -16,3 +16,15 @@ Zoom functions and structures: [reverse-engineering.md](reverse-engineering.md#f
   disagree the check passes for a level that does not fit. The hook also requires `levels[index - 1] >= needed`.
   Log line `[CanZoomOut] blocked: ...` shows when it acts. If the garbling still happens, the zoom comes from another path
   (callers of `0x4C7CF0`: `0x4C01D8`, `0x4C84D0` in `Camera_Update`, `0x4C9159`, `0x4CE879`, `0x50E213`, `0x5143E2`).
+
+## v0.5.5 - mission 3 after mission 2 (tested 2026-11-05)
+- At the start of a mission after another mission the camera (`world + 0x4738/0x473C`, top-left of the view, passed to
+  `FUN_004D0A10`) can lie outside the map (mission 3: `-1520, -272`): garbled picture until the player scrolls, negative cells
+  in `Grid_CollectObjectsInCell`. `ClampCameraToMap` clamps it to `[0, map - view]` every frame. Loading a save was fine.
+- `Camera_SetPositionClamped` only *returns* the clamped position in its out parameter, it does not move the camera.
+- `Grid_CollectObjectsInCell` (`0x4E89D0`) is `RET 0xC` (3 stack arguments: out, cell, mask). The hook ignores unreadable cells.
+- Dialog crash at 3440x1440: the colour-key MMX blitters `0x622550`, `0x62261C`, `0x622720` only skipped a zero width/height,
+  a negative one (rect clipped to the virtual 1832x768 screen) ran through memory. Patched to skip negative sizes
+  (`TEST`/`JLE`, `SHR` -> `SAR` in `0x62261C`). Cause not found: something in a dialog is drawn outside the virtual screen.
+- Build as Release: the Debug CRT asserts (`log10 failed`) on garbage floats read from a freed world.
+- Mission-init hook at `0x4BED98` was tried: the map size is still 0 there, so it was dropped.
