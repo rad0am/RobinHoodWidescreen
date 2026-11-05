@@ -15,6 +15,7 @@ add_library(RobinHoodWidescreen SHARED
     src/crash_reporter.cpp
     src/core/log.cpp
     src/core/patch.cpp
+    src/features/bar_fill.cpp
     src/features/camera.cpp
     src/features/dialog_scaling.cpp
     src/features/menu_labels.cpp

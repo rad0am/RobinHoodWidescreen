@@ -8,12 +8,14 @@
 // What it does:
 //   - the resolution menu offers sizes with the desktop's aspect ratio, native included (features/resolution);
 //   - zoom fix: the view never gets wider than the map (features/camera);
-//   - dialogs (briefing, pause menu, options, ...) keep the size they have at height 768 (features/dialog_scaling).
+//   - dialogs (briefing, pause menu, options, ...) keep the size they have at height 768 (features/dialog_scaling);
+//   - the black strip of the bottom bar is filled with the foliage ornament (features/bar_fill).
 
 #include <windows.h>
 
 #include "core/log.h"
 #include "crash_reporter.h"
+#include "features/bar_fill.h"
 #include "features/camera.h"
 #include "features/dialog_scaling.h"
 #include "features/menu_labels.h"
@@ -21,7 +23,7 @@
 
 namespace {
 
-constexpr const char* MOD_VERSION = "0.5.3";
+constexpr const char* MOD_VERSION = "0.5.4";
 
 }  // namespace
 
@@ -38,6 +40,7 @@ extern "C" BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
         rhw::camera::Install();
         rhw::menu_labels::Install();
         rhw::dialogs::Install();
+        rhw::bar_fill::Install();
         rhw::crash_reporter::Install();
     }
     return TRUE;
