@@ -1,5 +1,6 @@
 #include "log.h"
 
+#include <cstdarg>
 #include <cstdio>
 
 namespace rhw {
@@ -13,6 +14,16 @@ void Log(const char* text)
         fprintf(f, "%s\n", text);
         fclose(f);
     }
+}
+
+void Logf(const char* format, ...)
+{
+    char text[512];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(text, sizeof(text), format, args);
+    va_end(args);
+    Log(text);
 }
 
 }  // namespace rhw

@@ -2,7 +2,6 @@
 // and every DirectInput call is forwarded to the real system DLL.
 
 #include <windows.h>
-#include <cstdio>
 
 #include "core/log.h"
 
@@ -24,11 +23,8 @@ FARPROC GetRealProc(const char* name)
         }
     }
     FARPROC proc = GetProcAddress(real, name);
-    if (!proc) {
-        char msg[128];
-        snprintf(msg, sizeof(msg), "ERROR: %s not found in the system dinput.dll", name);
-        rhw::Log(msg);
-    }
+    if (!proc)
+        rhw::Logf("ERROR: %s not found in the system dinput.dll", name);
     return proc;
 }
 

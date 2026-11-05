@@ -4,7 +4,6 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 
 #include "log.h"
 
@@ -46,9 +45,10 @@ Fn Hook(const char* name, uintptr_t target, const uint8_t (&expected)[N], Fn hoo
 {
     static_assert(N >= 5, "a JMP rel32 needs 5 bytes");
     void* tramp = InstallHook(target, expected, N, reinterpret_cast<void*>(hook));
-    char msg[96];
-    snprintf(msg, sizeof(msg), tramp ? "Hook %s installed" : "Hook %s NOT installed (unknown Game.exe version)", name);
-    Log(msg);
+    if (tramp)
+        Logf("Hook %s installed", name);
+    else
+        Logf("Hook %s NOT installed (unknown Game.exe version)", name);
     return reinterpret_cast<Fn>(tramp);
 }
 

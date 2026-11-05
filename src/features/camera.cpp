@@ -1,7 +1,6 @@
 #include "camera.h"
 
 #include <cstdint>
-#include <cstdio>
 
 #include "core/log.h"
 #include "core/patch.h"
@@ -53,10 +52,8 @@ void EnsureZoomFits(const char* caller)
     uint16_t oldIndex = zoomIndex;
     zoomIndex = index;
 
-    char msg[200];
-    snprintf(msg, sizeof(msg), "[%s] zoom %.2f -> %.2f, index %u -> %u (needed >= %.3f, screen %.0fx%.0f, map %.0fx%.0f)",
-             caller, oldZoom, zoom, oldIndex, index, needed, screenW, screenH, mapW, mapH);
-    Log(msg);
+    Logf("[%s] zoom %.2f -> %.2f, index %u -> %u (needed >= %.3f, screen %.0fx%.0f, map %.0fx%.0f)",
+         caller, oldZoom, zoom, oldIndex, index, needed, screenW, screenH, mapW, mapH);
 }
 
 // Called by the game whenever the camera is moved; center is the requested camera center.

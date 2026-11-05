@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -42,7 +43,7 @@ bool GetDesktopResolution(DWORD& width, DWORD& height)
 uint32_t WidthForHeight(DWORD desktopW, DWORD desktopH, uint32_t height)
 {
     double width = static_cast<double>(desktopW) * height / desktopH;
-    return static_cast<uint32_t>(width / 8.0 + 0.5) * 8;
+    return static_cast<uint32_t>(std::lround(width / 8.0)) * 8;
 }
 
 // Points one menu button at a new resolution: both push immediate and the selection compare.
@@ -97,7 +98,7 @@ void Patch()
         bool isNative  = i == MENU_BUTTON_COUNT - 1;
         bool tooSmall  = size.width < 1024 || size.height < 768;
         bool notSmaller = !isNative && size.height >= desktopH;
-        bool duplicate = std::find(std::begin(usedWidths), std::end(usedWidths), size.width) != std::end(usedWidths);
+        bool duplicate = std::ranges::find(usedWidths, size.width) != std::end(usedWidths);
 
         const char* result;
         if (tooSmall || notSmaller || duplicate) {

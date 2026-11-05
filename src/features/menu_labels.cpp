@@ -1,7 +1,6 @@
 #include "menu_labels.h"
 
 #include <cstdint>
-#include <cstdio>
 #include <cwchar>
 
 #include "core/log.h"
@@ -45,9 +44,7 @@ int __fastcall Hook_GetText(void* self, void* edx, uint32_t id, uint32_t index, 
         static bool logged[MENU_BUTTON_COUNT] = {};
         if (!logged[button]) {
             logged[button] = true;
-            char msg[96];
-            snprintf(msg, sizeof(msg), "[GetText] label %u replaced with %ls", index, g_buttonLabels[button]);
-            Log(msg);
+            Logf("[GetText] label %u replaced with %ls", index, g_buttonLabels[button]);
         }
     }
     return found;

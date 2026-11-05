@@ -11,7 +11,6 @@
 //   - dialogs (briefing, pause menu, options, ...) keep the size they have at height 768 (features/dialog_scaling).
 
 #include <windows.h>
-#include <cstdio>
 
 #include "core/log.h"
 #include "crash_reporter.h"
@@ -34,9 +33,7 @@ extern "C" BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
 {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(module);
-        char msg[64];
-        snprintf(msg, sizeof(msg), "RobinHoodWidescreen %s loaded", MOD_VERSION);
-        rhw::Log(msg);
+        rhw::Logf("RobinHoodWidescreen %s loaded", MOD_VERSION);
         rhw::resolution::Patch();
         rhw::camera::Install();
         rhw::menu_labels::Install();
