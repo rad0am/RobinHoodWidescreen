@@ -55,13 +55,21 @@ Details: [docs/reverse-engineering.md](docs/reverse-engineering.md).
 
 ## Files
 
-| File                          | Contents                                                                                           |
-|-------------------------------|----------------------------------------------------------------------------------------------------|
-| `dllmain.cpp`                 | the whole mod: resolution patches, hooks, zoom logic, dialog scaling, DirectInput proxy, `DllMain` |
-| `exports.def`                 | undecorated exports: `DirectInputCreateA`, `DirectInputCreateW`, `DirectInputCreateEx`             |
-| `CMakeLists.txt`              | build: 32-bit, static CRT, output file `dinput.dll`                                                |
-| `docs/reverse-engineering.md` | addresses, structures and findings                                                                 |
-| `TODO.md`                     | remaining work (short list, details in `docs/`)                                                    |
+| File                               | Contents                                                                               |
+|------------------------------------|----------------------------------------------------------------------------------------|
+| `src/main.cpp`                     | `DllMain`: version, installs every feature                                             |
+| `src/dinput_proxy.cpp`             | DirectInput proxy: forwards `DirectInputCreate*` to the system `dinput.dll`            |
+| `src/crash_reporter.cpp`           | logs the first crash inside `Game.exe` (registers, call chain)                         |
+| `src/core/`                        | log file, code patches and hook installation (trampolines)                             |
+| `src/game/`                        | addresses, offsets, prologues and data structures of `Game.exe`                        |
+| `src/features/resolution.cpp`      | resolution buttons and new-profile default sized from the desktop                      |
+| `src/features/menu_labels.cpp`     | real sizes on the resolution buttons                                                   |
+| `src/features/camera.cpp`          | zoom fix                                                                               |
+| `src/features/dialog_scaling.cpp`  | dialogs at the size they have at height 768                                            |
+| `exports.def`                      | undecorated exports: `DirectInputCreateA`, `DirectInputCreateW`, `DirectInputCreateEx` |
+| `CMakeLists.txt`                   | build: 32-bit, static CRT, output file `dinput.dll`                                    |
+| `docs/reverse-engineering.md`      | addresses, structures and findings                                                     |
+| `TODO.md`                          | remaining work (short list, details in `docs/`)                                        |
 
 ## Building
 

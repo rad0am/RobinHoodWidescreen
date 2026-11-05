@@ -126,7 +126,7 @@ Only in a mission (`[0x6C0FA8] != 0`) and only when the screen is taller than 76
    Called by `0x53BB80` (`RET 0xC`), called by the scroll `0x544B91`.
 6. While paused, only the cursor is redrawn: its background is saved and restored per **flip page** (surfaces 993/994 alternate).
 
-### What the mod does (`dllmain.cpp`, "Interface scaling for dialogs")
+### What the mod does (`src/features/dialog_scaling.cpp`)
 | Hook                       | Address                                                                                                    | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 |----------------------------|------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `GetSurfaceWidth`/`Height` | `0x5E56C0` / `0x5E5750` (`RET 4`, u16 in AX)                                                               | a **known dialog start** asking for the screen size (id 0) switches the dialog mode on first (both virtual pages get a shrunk copy of the screen), so the answer and everything after it is virtual. Starts (return addresses): window layer `0x53B6DF`/`0x53B6E9`, scroll `0x544087`/`0x5440AA`, scroll background `0x5441C0`/`0x5441CD`. Other menu callers keep the real size (v0.5 first gave the virtual size to all `RHMenu*` code in a mission: the mission summary opened without the window layer and stayed small, the main menu built right after a mission was laid out virtual). A start inside a modal loop (`RunModal` depth > 0) is ignored: mission dialogs open at depth 0, but the main menu after a mission is itself a modal loop with the world pointer still set, and its quit question uses the scroll — v0.5 scaled only its background (small scroll top-left, then a crash in the blitter `0x6225F2`) |
@@ -156,7 +156,7 @@ The menu (`0x52CF80`) passes the resolution as `push float` (`68` + 4 bytes), he
 | 800x600  | `0x12CFF2` / `0x12CFF7` | `0x52CFF2` / `0x52CFF7` | `68 00 00 16 44` / `68 00 00 48 44` | unchanged                                             |
 | 1024x768 | `0x12D038` / `0x12D03D` | `0x52D038` / `0x52D03D` | `68 00 00 40 44` / `68 00 00 80 44` | `68 00 00 B4 44` (1440.0) / `68 00 00 57 45` (3440.0) |
 
-Since 2026-10-28 `Game.exe` is original again; `PatchResolution()` in the DLL writes the new sizes in memory
+Since 2026-10-28 `Game.exe` is original again; `resolution::Patch()` in the DLL writes the new sizes in memory
 (since v0.3 all three buttons: 640x480 → height 768, 800x600 → height 1080, 1024x768 → native, all with the desktop's aspect ratio):
 
 | What                                                                    | VA (immediate)                       | Original                                                                      |
@@ -239,7 +239,7 @@ heap), `0x4239C0` = `_Eos(n)` (sets length and terminator, `RET 4`), `0x64158F` 
 To change a string returned by the game: `_Grow(n, true)`, copy the characters, set `length` and the terminator — never
 write into a shared buffer.
 
-## The hook (how it works in `dllmain.cpp`)
+## The hook (how it works in `src/core/patch.cpp`)
 
 Both hooked functions start with the MSVC SEH prologue:
 ```

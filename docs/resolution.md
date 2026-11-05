@@ -9,7 +9,7 @@ Addresses and byte patterns: [reverse-engineering.md](reverse-engineering.md#res
 - [x] Original `Game.exe` restored (2026-10-28; bytes at `0x12D038` checked: `68 00 00 40 44 68 00 00 80 44`). `dinput.dll` stayed in the folder.
 
 ## Patching in memory instead of in the file
-- [x] `PatchResolution()` in `DllMain` replaces the floats of the 1024x768 menu button (`0x52CF80`):
+- [x] `PatchResolution()` (now `resolution::Patch()`) replaces the floats of the 1024x768 menu button (`0x52CF80`):
   height immediate at VA `0x52D039`, width at VA `0x52D03E`. Original bytes are checked before writing (`PatchValue`).
 - [x] New profile default (800×600 in `FUN_0055d670`): immediate at VA `0x55D763` (600.0) / `0x55D768` (800.0) → desktop resolution.
 - [x] `cmp eax, 0x400` at VA `0x52D0BF` (imm `0x52D0C0`) = `FUN_0052D090`, selects the radio button for the current width
@@ -47,7 +47,7 @@ Plan (decided 2026-10-28): replace all three menu buttons with sizes computed fr
 - Widths rounded to a multiple of 8 (safer for old DirectDraw surface code; aspect error < 0.2 %). A button is skipped (left
   original) if its size would be < 1024×768, not smaller than native, or have the same width as another button
   (the selection compares widths only).
-- [x] 2026-10-30, v0.3: `PatchResolution()` patches all three buttons (`MENU_BUTTONS` table in `dllmain.cpp`): push immediate
+- [x] 2026-10-30, v0.3: `PatchResolution()` patches all three buttons (`MENU_BUTTONS` table in `src/game/addresses.h`): push immediate
   and the radio selection compares in `FUN_0052D090` (bytes verified in Game.exe). Tested in game 2026-10-30: works.
 - [x] Check that the GOG wrapper accepts a non-standard mode such as 1832×768 in `SetDisplayMode` (with `display=desktop` it should).
 - [x] Test in game (2026-10-30, OK): sharpness at 1.875×, main menu at height 768, how much map is visible, zoom (hook should raise it as needed).
