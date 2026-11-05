@@ -21,7 +21,7 @@
 
 namespace {
 
-constexpr const char* MOD_VERSION = "0.5.2";
+constexpr const char* MOD_VERSION = "0.5.3";
 
 }  // namespace
 

@@ -11,6 +11,7 @@ namespace rhw {
 // ===== Functions and globals =====
 constexpr uintptr_t ADDR_SET_CAMERA    = 0x005758D0;   // Camera_SetPositionClamped (cdecl)
 constexpr uintptr_t ADDR_CAMERA_UPDATE = 0x004C8380;   // Camera_Update (this in ECX), runs every frame
+constexpr uintptr_t ADDR_CAN_ZOOM_OUT  = 0x004C7CF0;   // World_CanZoomOut (this = world in ECX) -> AL, asked by the zoom out key
 constexpr uintptr_t ADDR_WORLD_PTR     = 0x006C0FA8;   // pointer to the world object
 constexpr uintptr_t ADDR_GET_TEXT      = 0x006009E0;   // Resource_GetText (this in ECX): string <index> of TEXT <id>
 constexpr uintptr_t ADDR_WSTRING_GROW  = 0x004239E0;   // std::wstring::_Grow(n, trim) of the game's CRT (this in ECX)
@@ -41,6 +42,7 @@ constexpr uint32_t OFF_MAP_W    = 0x4730;   // float, map width in pixels
 constexpr uint32_t OFF_MAP_H    = 0x4734;   // float, map height in pixels
 constexpr uint32_t OFF_ZOOM     = 0x475C;   // float, 0.5 / 1.0 / 2.0
 constexpr uint32_t OFF_ZOOM_IDX = 0x4898;   // u16, index of the zoom level in the table at +0x489C (0..2); the zoom keys change it
+constexpr uint32_t OFF_ZOOM_LEVELS = 0x489C;   // float[3], zoom levels 0.5 / 1.0 / 2.0
 constexpr float    HUD_HEIGHT   = 80.0f;    // bottom interface bar, the map is not drawn under it
 
 // ===== Resolution constants (operands of PUSH / CMP instructions) =====
@@ -76,6 +78,8 @@ constexpr uintptr_t ADDR_DEFAULT_WIDTH  = 0x0055D768;
 inline constexpr uint8_t PROLOGUE_SET_CAMERA[7]    = { 0x6A, 0xFF, 0x68, 0x1F, 0xB3, 0x66, 0x00 };
 inline constexpr uint8_t PROLOGUE_CAMERA_UPDATE[7] = { 0x6A, 0xFF, 0x68, 0x72, 0xC6, 0x65, 0x00 };
 inline constexpr uint8_t PROLOGUE_BLIT[7]          = { 0x6A, 0xFF, 0x68, 0xC8, 0x28, 0x67, 0x00 };
+// World_CanZoomOut, 6 bytes: FLD dword [ECX+0x475C]
+inline constexpr uint8_t PROLOGUE_CAN_ZOOM_OUT[6]  = { 0xD9, 0x81, 0x5C, 0x47, 0x00, 0x00 };
 // Present reads the SEH list first, 8 bytes: MOV EAX, FS:[0]; PUSH -1
 inline constexpr uint8_t PROLOGUE_FS_SEH[8]        = { 0x64, 0xA1, 0x00, 0x00, 0x00, 0x00, 0x6A, 0xFF };
 // Resource_GetText, 7 bytes: SUB ESP, 0x10; LEA EAX, [ESP+0x14]
